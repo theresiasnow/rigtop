@@ -1,0 +1,34 @@
+# nmead example configuration
+# Copy to nmead.toml and adjust for your setup.
+
+[general]
+interval = 2.0    # poll interval in seconds
+# once = true     # uncomment to read once and exit
+
+# --- GPS Source ---
+# Only one [source] section is used.
+
+# Option A: IC-705 (or any Hamlib-supported rig) via rigctld
+[source]
+type = "rigctld"
+host = "127.0.0.1"
+port = 4532
+
+# Option B: iOS GPS2IP app (TCP NMEA stream)
+# [source]
+# type = "gps2ip"
+# host = "192.168.1.100"
+# port = 11123
+
+# --- Position Sinks ---
+# Use [[sink]] (double brackets) for each sink. Multiple sinks can run simultaneously.
+
+[[sink]]
+type = "console"
+nmea = false       # set to true to include NMEA GGA/RMC sentences
+
+# Uncomment to also send grid locator to WSJT-X:
+# [[sink]]
+# type = "wsjtx"
+# host = "127.0.0.1"
+# port = 2237

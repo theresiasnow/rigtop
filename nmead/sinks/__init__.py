@@ -1,0 +1,62 @@
+"""Position sink abstraction and registry."""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from typing import Any
+
+from nmead.sources import Position
+
+
+class PositionSink(ABC):
+    """Base class for position output destinations."""
+
+    @abstractmethod
+    def start(self) -> None: ...
+
+    @abstractmethod
+    def send(self, pos: Position, grid: str) -> str | None:
+        """Send position data. Returns optional status message for logging."""
+
+    @abstractmethod
+    def close(self) -> None: ...
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+
+# --- Sink registry ---
+
+_SINK_TYPES: dict[str, type[PositionSink]] = {}
+
+
+def register_sink(name: str):
+    """Decorator to register a position sink type."""
+
+    def decorator(cls: type[PositionSink]):
+        _SINK_TYPES[name] = cls
+        return cls
+
+    return decorator
+
+
+def create_sink(config: dict[str, Any]) -> PositionSink:
+    """Create a position sink from a config dict.  Expects a 'type' key."""
+    sink_type = config.get("type", "console")
+    cls = _SINK_TYPES.get(sink_type)
+    if cls is None:
+        available = ", ".join(sorted(_SINK_TYPES))
+        raise ValueError(
+            f"Unknown sink type '{sink_type}'. Available: {available}"
+        )
+    kwargs = {k: v for k, v in config.items() if k != "type"}
+    return cls(**kwargs)
+
+
+# Import concrete sinks to trigger registration
+import nmead.sinks.console as _console  # noqa: F401, E402
+import nmead.sinks.wsjtx as _wsjtx  # noqa: F401, E402

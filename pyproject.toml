@@ -1,7 +1,7 @@
 [project]
 name = "nmead"
-version = "0.1.0"
-description = "Read GPS/NMEA data from IC-705 via rigctld (Hamlib)"
+version = "0.2.0"
+description = "Read GPS/NMEA position from various sources (rigctld, GPS2IP) and forward to sinks (console, WSJT-X)"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
