@@ -117,12 +117,15 @@ def main():
     if args.log_level is not None:
         cfg.log_level = args.log_level
 
-    # Configure loguru: remove default stderr sink, add one at the right level
+    # Configure loguru: remove default stderr sink, log to file
     logger.remove()
+    log_file = Path("rigtop.log")
     logger.add(
-        sys.stderr,
+        str(log_file),
         level=cfg.log_level.value,
-        format="<dim>{time:HH:mm:ss}</dim> <level>{level:<8}</level> | <cyan>{name}</cyan> - {message}",
+        format="{time:YYYY-MM-DD HH:mm:ss.SSS} {level:<8} | {name} - {message}",
+        rotation="5 MB",
+        retention=3,
     )
 
     if args.interval is not None:
@@ -163,6 +166,17 @@ def main():
         if not any(s.type == "wsjtx" for s in cfg.sinks):
             cfg.sinks.append(wsjtx_sink)
 
+    # --- Create sinks early so the TUI log buffer exists before rigctld starts ---
+    sinks = [create_sink(s.model_dump(exclude_defaults=False)) for s in cfg.sinks]
+
+    tui_log_buf: TuiLogBuffer | None = None
+    for sink in sinks:
+        if getattr(sink, "tui", False):
+            tui_log_buf = TuiLogBuffer()
+            tui_log_buf.min_level = cfg.log_level.value
+            sink.log_buffer = tui_log_buf
+            break
+
     # --- Auto-start rigctld if configured ---
     launcher: RigctldLauncher | None = None
 
@@ -183,6 +197,7 @@ def main():
             listen_host=cfg.rig.host,
             listen_port=cfg.rig.port,
             log_level=cfg.log_level.value,
+            stderr_callback=tui_log_buf.push_line if tui_log_buf else None,
         )
         try:
             launcher.start()
@@ -215,24 +230,7 @@ def main():
                   f"({cfg.gps_fallback.host}:{cfg.gps_fallback.port}): {e}")
             gps_fallback = None
 
-    # --- Create and start sinks ---
-    sinks = [create_sink(s.model_dump(exclude_defaults=False)) for s in cfg.sinks]
-
-    # If a TUI sink is present, attach a log buffer and register it with loguru
-    # Only show rigctld-related messages in the TUI log pane
-    _tui_modules = {"rigtop.sources.rigctld", "rigtop.app"}
-    for sink in sinks:
-        if getattr(sink, "tui", False):
-            log_buf = TuiLogBuffer()
-            sink.log_buffer = log_buf
-            logger.add(
-                log_buf.write,
-                level=cfg.log_level.value,
-                format="{message}",
-                filter=lambda record: record["name"] in _tui_modules,
-            )
-            break
-
+    # --- Start sinks ---
     for sink in sinks:
         sink.start()
 

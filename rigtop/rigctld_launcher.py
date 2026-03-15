@@ -4,17 +4,13 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import threading
 import time
+from typing import Callable
 
 from loguru import logger
 
 # Map Python log-level names to rigctld -v flag count.
-_VERBOSITY: dict[str, int] = {
-    "ERROR": 0,
-    "WARNING": 1,
-    "INFO": 3,
-    "DEBUG": 5,
-}
 
 
 class RigctldLauncher:
@@ -38,6 +34,7 @@ class RigctldLauncher:
         listen_host: str = "127.0.0.1",
         listen_port: int = 4532,
         log_level: str = "WARNING",
+        stderr_callback: Callable[[str], None] | None = None,
         extra_args: list[str] | None = None,
     ) -> None:
         self.model = model
@@ -55,8 +52,10 @@ class RigctldLauncher:
         self.listen_host = listen_host
         self.listen_port = listen_port
         self.log_level = log_level.upper()
+        self.stderr_callback = stderr_callback
         self.extra_args = extra_args or []
         self._proc: subprocess.Popen[bytes] | None = None
+        self._stderr_thread: threading.Thread | None = None
 
     # ------------------------------------------------------------------
 
@@ -92,9 +91,8 @@ class RigctldLauncher:
             conf["ptt_share"] = "1"
         for key, value in conf.items():
             cmd.extend(["-C", f"{key}={value}"])
-        v_count = _VERBOSITY.get(self.log_level, 1)
-        if v_count:
-            cmd.append("-" + "v" * v_count)
+        # Always max verbosity — filtering happens in the TUI.
+        cmd.append("-vvvvv")
         cmd.extend(self.extra_args)
         return cmd
 
@@ -107,8 +105,14 @@ class RigctldLauncher:
         self._proc = subprocess.Popen(
             cmd,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE if self.stderr_callback else subprocess.DEVNULL,
         )
+        # Spawn a reader thread for stderr if a callback was provided.
+        if self.stderr_callback and self._proc.stderr:
+            self._stderr_thread = threading.Thread(
+                target=self._read_stderr, daemon=True,
+            )
+            self._stderr_thread.start()
         # Give rigctld a moment to bind the TCP port.
         time.sleep(settle)
         if self._proc.poll() is not None:
@@ -130,6 +134,16 @@ class RigctldLauncher:
             logger.warning("rigctld did not exit, killing")
             self._proc.kill()
         self._proc = None
+
+    def _read_stderr(self) -> None:
+        """Background thread: read rigctld stderr line by line."""
+        proc = self._proc
+        if proc is None or proc.stderr is None:
+            return
+        for raw in proc.stderr:
+            line = raw.decode("utf-8", errors="replace").rstrip()
+            if line and self.stderr_callback:
+                self.stderr_callback(line)
 
     @property
     def running(self) -> bool:

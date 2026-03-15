@@ -19,28 +19,46 @@ def _is_tui(sink: PositionSink) -> bool:
     return getattr(sink, "tui", False)
 
 
-def _key_listener(stop: threading.Event) -> None:
-    """Background thread: watch for 'q' or ':q' to signal exit."""
+def _key_listener(stop: threading.Event, tui_sink=None) -> None:
+    """Background thread: ':q' to quit, route commands to TUI."""
     if sys.platform == "win32":
         import msvcrt
-        buf = ""
         while not stop.is_set():
             if msvcrt.kbhit():
                 ch = msvcrt.getwch()
-                if ch in ("\r", "\n"):
-                    if buf.strip() in ("q", ":q"):
-                        stop.set()
-                        return
-                    buf = ""
-                elif ch == "\x03":  # Ctrl+C
+                # Command mode
+                if tui_sink is not None and tui_sink.command_mode:
+                    if ch in ("\r", "\n"):
+                        cmd = tui_sink.command_buf
+                        tui_sink.command_buf = ""
+                        tui_sink.command_mode = False
+                        if cmd.strip() in ("q", "quit"):
+                            stop.set()
+                            return
+                        tui_sink.execute_command(cmd)
+                    elif ch == "\x1b":  # Escape
+                        tui_sink.command_buf = ""
+                        tui_sink.command_mode = False
+                    elif ch == "\x08":  # Backspace
+                        tui_sink.command_buf = tui_sink.command_buf[:-1]
+                    elif ch == "\t":  # Tab completion
+                        tui_sink.tab_complete()
+                    elif ch == "\x03":  # Ctrl+C
+                        tui_sink.command_buf = ""
+                        tui_sink.command_mode = False
+                    else:
+                        tui_sink.command_buf += ch
+                    tui_sink.refresh_command_bar()
+                    continue
+                # Normal mode
+                if ch == ":" and tui_sink is not None:
+                    tui_sink.command_mode = True
+                    tui_sink.command_buf = ""
+                    tui_sink.refresh_command_bar()
+                    continue
+                if ch == "\x03":  # Ctrl+C
                     stop.set()
                     return
-                else:
-                    buf += ch
-                    # Single 'q' without needing Enter
-                    if buf == "q":
-                        stop.set()
-                        return
             else:
                 time.sleep(0.1)
     else:
@@ -50,22 +68,41 @@ def _key_listener(stop: threading.Event) -> None:
         old = termios.tcgetattr(fd)
         try:
             tty.setcbreak(fd)
-            buf = ""
             while not stop.is_set():
                 ch = sys.stdin.read(1)
-                if ch in ("\r", "\n"):
-                    if buf.strip() in ("q", ":q"):
-                        stop.set()
-                        return
-                    buf = ""
-                elif ch == "\x03":
+                # Command mode
+                if tui_sink is not None and tui_sink.command_mode:
+                    if ch in ("\r", "\n"):
+                        cmd = tui_sink.command_buf
+                        tui_sink.command_buf = ""
+                        tui_sink.command_mode = False
+                        if cmd.strip() in ("q", "quit"):
+                            stop.set()
+                            return
+                        tui_sink.execute_command(cmd)
+                    elif ch == "\x1b":  # Escape
+                        tui_sink.command_buf = ""
+                        tui_sink.command_mode = False
+                    elif ch in ("\x7f", "\x08"):  # Backspace
+                        tui_sink.command_buf = tui_sink.command_buf[:-1]
+                    elif ch == "\t":  # Tab completion
+                        tui_sink.tab_complete()
+                    elif ch == "\x03":  # Ctrl+C
+                        tui_sink.command_buf = ""
+                        tui_sink.command_mode = False
+                    else:
+                        tui_sink.command_buf += ch
+                    tui_sink.refresh_command_bar()
+                    continue
+                # Normal mode
+                if ch == ":" and tui_sink is not None:
+                    tui_sink.command_mode = True
+                    tui_sink.command_buf = ""
+                    tui_sink.refresh_command_bar()
+                    continue
+                if ch == "\x03":  # Ctrl+C
                     stop.set()
                     return
-                else:
-                    buf += ch
-                    if buf == "q":
-                        stop.set()
-                        return
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
@@ -84,9 +121,10 @@ def run(
     Frequency, mode, and meters always come from *rig*.
     """
     has_tui = any(_is_tui(s) for s in sinks)
+    tui_sink = next((s for s in sinks if _is_tui(s)), None)
 
     stop = threading.Event()
-    key_thread = threading.Thread(target=_key_listener, args=(stop,), daemon=True)
+    key_thread = threading.Thread(target=_key_listener, args=(stop, tui_sink), daemon=True)
     key_thread.start()
 
     if not has_tui:
