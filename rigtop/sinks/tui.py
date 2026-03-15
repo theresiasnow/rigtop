@@ -50,9 +50,11 @@ class TuiLogBuffer:
         if not lines:
             txt.append(" (no log messages)", style="dim")
             return txt
-        for level, line in lines:
+        for i, (level, line) in enumerate(lines):
             style = _LOG_STYLES.get(level, "")
-            txt.append(f" {line}\n", style=style)
+            txt.append(f" {line}", style=style)
+            if i < len(lines) - 1:
+                txt.append("\n")
         return txt
 
 METER_ORDER = [
@@ -181,13 +183,14 @@ class TuiSink(PositionSink):
 
         parts: list = [alert_panel]
         if self.log_buffer is not None:
-            log_text = self.log_buffer.render(max_lines=10)
+            term_h = self._console.size.height
+            log_lines = max(3, term_h - 18)
+            log_text = self.log_buffer.render(max_lines=log_lines)
             log_panel = Panel(
                 log_text,
                 title="[bold]Log[/bold]",
                 border_style="dim",
                 expand=True,
-                height=14,
             )
             parts.append(log_panel)
 
@@ -273,16 +276,19 @@ class TuiSink(PositionSink):
 
         top_row = Columns([right_panel, left_panel], equal=True, expand=True)
 
-        # ── Bottom pane: Log messages ──
+        # ── Bottom pane: Log messages (fills remaining terminal height) ──
         parts: list = [top_row]
         if self.log_buffer is not None:
-            log_text = self.log_buffer.render(max_lines=10)
+            # Top row panels take ~14 rows, outer panel border takes 2,
+            # log panel border takes 2.  Use the rest for log lines.
+            term_h = self._console.size.height
+            log_lines = max(3, term_h - 18)
+            log_text = self.log_buffer.render(max_lines=log_lines)
             log_panel = Panel(
                 log_text,
                 title="[bold]Log[/bold]",
                 border_style="dim",
                 expand=True,
-                height=14,
             )
             parts.append(log_panel)
 
