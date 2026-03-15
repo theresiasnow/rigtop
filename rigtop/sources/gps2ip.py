@@ -4,7 +4,7 @@ import socket
 
 import pynmea2
 
-from nmead.sources import GpsSource, Position, register_source
+from rigtop.sources import GpsSource, Position, register_source
 
 
 @register_source("gps2ip")

@@ -65,5 +65,5 @@ def create_source(config: dict[str, Any]) -> GpsSource:
 
 
 # Import concrete sources to trigger registration
-import nmead.sources.gps2ip as _gps2ip  # noqa: F401, E402
-import nmead.sources.rigctld as _rigctld  # noqa: F401, E402
+import rigtop.sources.gps2ip as _gps2ip  # noqa: F401, E402
+import rigtop.sources.rigctld as _rigctld  # noqa: F401, E402

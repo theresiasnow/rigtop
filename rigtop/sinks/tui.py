@@ -3,16 +3,57 @@
 from __future__ import annotations
 
 import datetime
+from collections import deque
 
-from rich.console import Console
+from rich.console import Console, Group
 from rich.columns import Columns
 from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
 
-from nmead.geo import format_position
-from nmead.sinks import PositionSink, register_sink
-from nmead.sources import Position
+from rigtop.geo import format_position
+from rigtop.sinks import PositionSink, register_sink
+from rigtop.sources import Position
+
+
+# ── Loguru sink that buffers records for the TUI ──
+
+_LOG_STYLES = {
+    "TRACE": "dim",
+    "DEBUG": "dim cyan",
+    "INFO": "green",
+    "SUCCESS": "bold green",
+    "WARNING": "yellow",
+    "ERROR": "bold red",
+    "CRITICAL": "bold white on red",
+}
+
+
+class TuiLogBuffer:
+    """Loguru custom sink that keeps the last *maxlen* formatted messages."""
+
+    def __init__(self, maxlen: int = 200) -> None:
+        self._records: deque[tuple[str, str]] = deque(maxlen=maxlen)
+
+    def write(self, message) -> None:
+        record = message.record
+        level = record["level"].name
+        ts = record["time"].strftime("%H:%M:%S")
+        mod = record["name"] or ""
+        text = record["message"]
+        self._records.append((level, f"{ts}  {level:<8} {mod} — {text}"))
+
+    def render(self, max_lines: int = 12) -> Text:
+        """Return a rich Text with the most recent log lines, coloured by level."""
+        txt = Text()
+        lines = list(self._records)[-max_lines:]
+        if not lines:
+            txt.append(" (no log messages)", style="dim")
+            return txt
+        for level, line in lines:
+            style = _LOG_STYLES.get(level, "")
+            txt.append(f" {line}\n", style=style)
+        return txt
 
 METER_ORDER = [
     "STRENGTH",
@@ -108,14 +149,57 @@ class TuiSink(PositionSink):
     def __init__(self) -> None:
         self._console = Console()
         self._live: Live | None = None
+        self.log_buffer: TuiLogBuffer | None = None
 
     def start(self) -> None:
         self._live = Live(
             console=self._console,
             refresh_per_second=2,
-            screen=False,
+            screen=True,
         )
         self._live.start()
+
+    def show_alert(self, message: str, detail: str = "") -> None:
+        """Display a full-screen alert (e.g. connection lost)."""
+        now = datetime.datetime.now().strftime("%H:%M:%S")
+
+        alert = Text()
+        alert.append("\n")
+        alert.append("  ⚠  ", style="bold red blink")
+        alert.append(f"{message}\n\n", style="bold red")
+        if detail:
+            alert.append(f"  {detail}\n", style="dim")
+        alert.append("\n  Reconnecting…\n", style="yellow")
+        alert.append(f"\n  {now}", style="dim")
+
+        alert_panel = Panel(
+            alert,
+            title="[bold red]CONNECTION LOST[/bold red]",
+            border_style="red",
+            expand=True,
+        )
+
+        parts: list = [alert_panel]
+        if self.log_buffer is not None:
+            log_text = self.log_buffer.render(max_lines=10)
+            log_panel = Panel(
+                log_text,
+                title="[bold]Log[/bold]",
+                border_style="dim",
+                expand=True,
+                height=14,
+            )
+            parts.append(log_panel)
+
+        outer = Panel(
+            Group(*parts),
+            title="[bold]rigtop[/bold]",
+            subtitle="[dim]q to quit[/dim]",
+            border_style="red",
+        )
+
+        if self._live:
+            self._live.update(outer)
 
     def send(self, pos: Position, grid: str, **kwargs) -> str | None:
         freq: str | None = kwargs.get("freq")
@@ -183,13 +267,27 @@ class TuiSink(PositionSink):
         )
 
         # ── Combine side by side ──
-        title = "[bold]nmead[/bold]"
+        title = "[bold]rigtop[/bold]"
         if source_label:
             title += f"  [dim]{source_label}[/dim]"
 
-        layout = Columns([right_panel, left_panel], equal=True, expand=True)
+        top_row = Columns([right_panel, left_panel], equal=True, expand=True)
+
+        # ── Bottom pane: Log messages ──
+        parts: list = [top_row]
+        if self.log_buffer is not None:
+            log_text = self.log_buffer.render(max_lines=10)
+            log_panel = Panel(
+                log_text,
+                title="[bold]Log[/bold]",
+                border_style="dim",
+                expand=True,
+                height=14,
+            )
+            parts.append(log_panel)
+
         outer = Panel(
-            layout,
+            Group(*parts),
             title=title,
             subtitle="[dim]q to quit[/dim]",
             border_style="blue",

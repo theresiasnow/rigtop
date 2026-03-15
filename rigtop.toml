@@ -1,10 +1,18 @@
 [general]
 interval = 2.0
+once = false
 meters = true
+log_level = "WARNING"
 
 [rig]
+name = "default"
 host = "127.0.0.1"
 port = 4532
+
+[rigctld]
+model = 3085
+serial_port = "COM9"
+baud_rate = 19200
 
 [gps_fallback]
 host = "192.168.50.162"

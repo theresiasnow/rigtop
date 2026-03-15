@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import socket
 
-from nmead.sources import GpsSource, Position, register_source
+from loguru import logger
+
+from rigtop.sources import GpsSource, Position, register_source
 
 #: Meter levels available during TX
 TX_METERS = ["ALC", "SWR", "RFPOWER_METER", "COMP_METER", "ID_METER", "VD_METER"]
@@ -23,19 +25,35 @@ class RigctldSource(GpsSource):
         self._sock: socket.socket | None = None
 
     def connect(self) -> None:
+        logger.info("Connecting to rigctld at {}:{}", self.host, self.port)
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.settimeout(self.timeout)
         self._sock.connect((self.host, self.port))
+        logger.info("Connected to rigctld")
 
     def close(self) -> None:
         if self._sock:
             self._sock.close()
             self._sock = None
 
+    def reconnect(self) -> None:
+        """Close and re-establish the TCP connection to rigctld."""
+        self.close()
+        logger.info("Reconnecting to rigctld at {}:{}…", self.host, self.port)
+        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._sock.settimeout(self.timeout)
+        self._sock.connect((self.host, self.port))
+        logger.info("Reconnected")
+
     def _send_command(self, cmd: str) -> str:
         if not self._sock:
             raise ConnectionError("Not connected to rigctld")
-        self._sock.sendall((cmd + "\n").encode())
+        logger.debug("TX: {}", cmd)
+        try:
+            self._sock.sendall((cmd + "\n").encode())
+        except OSError:
+            self.reconnect()
+            self._sock.sendall((cmd + "\n").encode())  # type: ignore[union-attr]
         response = b""
         while True:
             try:
@@ -46,8 +64,11 @@ class RigctldSource(GpsSource):
                 if response.endswith(b"\n"):
                     break
             except socket.timeout:
+                logger.debug("RX: (timeout)")
                 break
-        return response.decode().strip()
+        decoded = response.decode().strip()
+        logger.debug("RX: {}", decoded)
+        return decoded
 
     def get_position(self) -> Position | None:
         resp = self._send_command("+\\get_position")

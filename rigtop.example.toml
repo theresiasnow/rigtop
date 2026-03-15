@@ -1,0 +1,44 @@
+# rigtop example configuration
+# Copy to rigtop.toml and adjust for your setup.
+
+[general]
+interval = 2.0        # poll interval in seconds
+once = false           # set true to read once and exit
+meters = true          # show rig meter values (ALC, SWR, power, etc.)
+log_level = "WARNING" # DEBUG, INFO, WARNING, ERROR (also controls rigctld -v)
+
+# --- Rig (rigctld) — always used for GPS, frequency, mode, meters ---
+[rig]
+name = "default"      # rig name (for multi-rig configs use [[rig]])
+host = "127.0.0.1"    # rigctld TCP host
+port = 4532            # rigctld TCP port
+
+# --- rigctld launcher (auto-start rigctld) ---
+# Remove this section or use --no-rigctld to skip auto-launch.
+[rigctld]
+model = 3085           # Hamlib rig model (3085 = IC-705)
+serial_port = "COM9"  # serial port (COM9, /dev/ttyUSB0, etc.)
+baud_rate = 19200      # serial baud rate (1200..115200)
+
+# --- GPS Fallback (optional) ---
+# If the rig has no GPS fix, fall back to iOS GPS2IP app.
+# Remove this section or use --no-gps to disable.
+[gps_fallback]
+host = "192.168.1.100" # GPS2IP app host address
+port = 11123            # GPS2IP TCP port
+
+# --- Sinks ---
+# Use [[sink]] (double brackets) for each sink. Multiple sinks run simultaneously.
+# Default sink is TUI if none specified.
+
+[[sink]]
+type = "tui"           # full-screen dashboard (default)
+
+# [[sink]]
+# type = "console"     # plain text output
+# nmea = false         # set true to include NMEA sentences
+
+# [[sink]]
+# type = "wsjtx"       # send grid locator to WSJT-X via UDP
+# host = "127.0.0.1"
+# port = 2237

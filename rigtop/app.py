@@ -7,10 +7,12 @@ import sys
 import threading
 import time
 
-from nmead.geo import maidenhead
-from nmead.sinks import PositionSink
-from nmead.sources import GpsSource
-from nmead.sources.rigctld import RigctldSource
+from loguru import logger
+
+from rigtop.geo import maidenhead
+from rigtop.sinks import PositionSink
+from rigtop.sources import GpsSource
+from rigtop.sources.rigctld import RigctldSource
 
 
 def _is_tui(sink: PositionSink) -> bool:
@@ -172,6 +174,24 @@ def run(
 
         except KeyboardInterrupt:
             break
-        except ConnectionError as e:
-            print(f"Connection lost: {e}")
-            break
+        except (ConnectionError, OSError) as e:
+            logger.warning("Connection error: {}", e)
+            if has_tui:
+                for s in sinks:
+                    if _is_tui(s):
+                        s.show_alert(str(e), f"rigctld @ {rig.host}:{rig.port}")
+            else:
+                print(f"Connection error: {e} — retrying…")
+            # Wait before retrying, but stay responsive to 'q'
+            for _ in range(50):  # ~5 seconds
+                if stop.is_set():
+                    break
+                time.sleep(0.1)
+            if stop.is_set():
+                break
+            # Try to reconnect
+            try:
+                rig.reconnect()
+                logger.info("Reconnected to rigctld")
+            except (ConnectionError, OSError) as re_err:
+                logger.warning("Reconnect failed: {}", re_err)

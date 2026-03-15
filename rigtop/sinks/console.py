@@ -1,8 +1,8 @@
 """Position sink: terminal/console output."""
 
-from nmead.geo import build_gga_sentence, build_rmc_sentence, format_position
-from nmead.sinks import PositionSink, register_sink
-from nmead.sources import Position
+from rigtop.geo import build_gga_sentence, build_rmc_sentence, format_position
+from rigtop.sinks import PositionSink, register_sink
+from rigtop.sources import Position
 
 
 @register_sink("console")

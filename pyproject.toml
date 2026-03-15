@@ -1,13 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
-name = "nmead"
-version = "0.2.0"
-description = "Read GPS/NMEA position from various sources (rigctld, GPS2IP) and forward to sinks (console, WSJT-X)"
+name = "rigtop"
+version = "0.3.0"
+description = "Ham radio rig dashboard — GPS, frequency, mode, meters via rigctld"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "loguru>=0.7.3",
+    "pydantic>=2.12.5",
     "pynmea2>=1.19.0",
     "rich>=13.0",
 ]
 
 [project.scripts]
-nmead = "main:main"
+rigtop = "main:main"

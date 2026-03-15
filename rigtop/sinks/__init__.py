@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import inspect
 from abc import ABC, abstractmethod
 from typing import Any
 
-from nmead.sources import Position
+from rigtop.sources import Position
 
 
 class PositionSink(ABC):
@@ -60,10 +61,15 @@ def create_sink(config: dict[str, Any]) -> PositionSink:
             f"Unknown sink type '{sink_type}'. Available: {available}"
         )
     kwargs = {k: v for k, v in config.items() if k != "type"}
+    # Only pass kwargs the constructor actually accepts.
+    sig = inspect.signature(cls.__init__)
+    if not any(p.kind == p.VAR_KEYWORD for p in sig.parameters.values()):
+        accepted = set(sig.parameters) - {"self"}
+        kwargs = {k: v for k, v in kwargs.items() if k in accepted}
     return cls(**kwargs)
 
 
 # Import concrete sinks to trigger registration
-import nmead.sinks.console as _console  # noqa: F401, E402
-import nmead.sinks.tui as _tui  # noqa: F401, E402
-import nmead.sinks.wsjtx as _wsjtx  # noqa: F401, E402
+import rigtop.sinks.console as _console  # noqa: F401, E402
+import rigtop.sinks.tui as _tui  # noqa: F401, E402
+import rigtop.sinks.wsjtx as _wsjtx  # noqa: F401, E402

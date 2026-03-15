@@ -1,20 +1,24 @@
-# nmead
+# rigtop
 
-Read GPS/NMEA position from various sources and forward to multiple sinks.
+Ham radio rig dashboard — GPS, frequency, mode, and meters via Hamlib rigctld.
 
-**Sources:**
-- **rigctld** — IC-705 (or any Hamlib rig) via rigctld TCP
-- **gps2ip** — iOS GPS2IP app via TCP NMEA stream
+Full-screen TUI with rig info, meter bars, GPS position, and Maidenhead grid.
+Auto-starts `rigctld`, auto-falls back to GPS2IP when the rig has no GPS fix.
 
-**Sinks:**
-- **console** — Terminal output with position, grid, optional NMEA sentences
-- **tui** — Live dashboard with meters, rig info, and position (using rich)
-- **wsjtx** — Send Maidenhead grid locator to WSJT-X via UDP
+## Features
+
+- **rigctld** — frequency, mode, passband, PTT, meters (ALC, SWR, power, etc.)
+- **GPS** — position from rig via rigctld, with iOS GPS2IP fallback
+- **TUI** — full-screen dashboard with rich (default output)
+- **Console** — plain text output
+- **WSJT-X** — sends Maidenhead grid locator via UDP
+- **rigctld launcher** — auto-starts rigctld from config (model, serial port, baud)
 
 ## Prerequisites
 
-- **Hamlib** with `rigctld` (for rigctld source)
-- **GPS2IP** iOS app (for gps2ip source)
+- Python 3.14+, [uv](https://docs.astral.sh/uv/)
+- [Hamlib](https://hamlib.github.io/) with `rigctld` on PATH
+- (Optional) [GPS2IP](https://apps.apple.com/app/gps-2-ip/id408625926) iOS app
 
 ## Setup
 
@@ -25,60 +29,65 @@ uv sync
 ## Quick start
 
 ```bash
-# GPS2IP → TUI dashboard + WSJT-X (main setup)
-uv run python main.py --source gps2ip --source-host 192.168.50.162 --source-port 11123 --tui --wsjtx
+# Just run it — TUI + meters + auto rigctld + auto GPS fallback from rigtop.toml
+uv run rigtop
 
-# IC-705 via rigctld (defaults: localhost:4532, console output)
-uv run python main.py
+# Plain console output instead of TUI
+uv run rigtop --console
 
-# iOS GPS2IP as source
-uv run python main.py --source gps2ip --source-host 192.168.1.100 --source-port 11123
+# Downgrade to console with NMEA sentences
+uv run rigtop --console --nmea
 
-# Read once, with NMEA output
-uv run python main.py --once --nmea
+# Add WSJT-X grid forwarding
+uv run rigtop --wsjtx
 
-# Show rig meters (ALC, SWR, power, etc.)
-uv run python main.py --meters
+# Skip auto-starting rigctld (already running externally)
+uv run rigtop --no-rigctld
 
-# Live TUI dashboard (implies --meters)
-uv run python main.py --tui
+# Disable GPS fallback
+uv run rigtop --no-gps
 
-# TUI + WSJT-X
-uv run python main.py --tui --wsjtx
+# Override rig connection
+uv run rigtop --rig-host 192.168.1.50 --rig-port 4532
 
-# Send to WSJT-X + console output
-uv run python main.py --console --wsjtx
+# Verbose logging (DEBUG also sets rigctld -vvvvv)
+uv run rigtop --log-level DEBUG
 
-# GPS2IP → console + WSJT-X on localhost
-uv run python main.py --source gps2ip --source-host 192.168.50.162 --source-port 11123 --wsjtx --console
+# Read once and exit
+uv run rigtop --once --console
 
-# WSJT-X on another machine
-uv run python main.py --wsjtx --wsjtx-host 192.168.1.50 --wsjtx-port 2237
-
-# Use a config file
-uv run python main.py -c nmead.toml
+# Explicit config file
+uv run rigtop -c /path/to/rigtop.toml
 ```
 
-## Configuration file
+## Configuration
 
-Copy `nmead.example.toml` to `nmead.toml` and edit. CLI flags override config values.
+Copy `rigtop.example.toml` to `rigtop.toml` and edit. The file is auto-discovered
+in the current directory. CLI flags override config values.
 
 ```toml
 [general]
-interval = 2.0
-meters = false
+interval = 2.0        # poll interval in seconds
+once = false           # read once and exit
+meters = true          # show rig meters
+log_level = "WARNING"  # DEBUG, INFO, WARNING, ERROR
 
-[source]
-type = "rigctld"
+[rig]
+name = "default"
 host = "127.0.0.1"
 port = 4532
 
-[[sink]]
-type = "console"
-nmea = false
+[rigctld]
+model = 3085           # Hamlib model (3085 = IC-705)
+serial_port = "COM9"
+baud_rate = 19200
 
-# [[sink]]
-# type = "tui"
+[gps_fallback]
+host = "192.168.50.162"
+port = 11123
+
+[[sink]]
+type = "tui"
 
 [[sink]]
 type = "wsjtx"
@@ -88,30 +97,38 @@ port = 2237
 
 ## CLI options
 
-| Flag             | Default       | Description                           |
-|------------------|---------------|---------------------------------------|
-| `-c, --config`   | —             | Path to TOML config file              |
-| `--interval`     | `2.0`         | Poll interval in seconds              |
-| `--once`         | off           | Read position once and exit           |
-| `--meters`       | off           | Show rig meter values (ALC, SWR, etc.)|
-| `--tui`          | off           | Live dashboard (implies --meters)     |
-| `--source`       | `rigctld`     | GPS source type: `rigctld`, `gps2ip`  |
-| `--source-host`  | varies        | Source host address                   |
-| `--source-port`  | varies        | Source TCP port                       |
-| `--console`      | (default)     | Enable console output sink            |
-| `--nmea`         | off           | Include NMEA sentences in console     |
-| `--wsjtx`        | off           | Enable WSJT-X UDP sink                |
-| `--wsjtx-host`   | `127.0.0.1`  | WSJT-X UDP host                       |
-| `--wsjtx-port`   | `2237`        | WSJT-X UDP port                       |
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-c, --config` | auto `rigtop.toml` | Path to TOML config file |
+| `--interval` | `2.0` | Poll interval in seconds |
+| `--once` | off | Read once and exit |
+| `--rig-host` | `127.0.0.1` | rigctld host address |
+| `--rig-port` | `4532` | rigctld TCP port |
+| `--no-rigctld` | off | Don't auto-start rigctld |
+| `--log-level` | `WARNING` | Log level (also controls rigctld `-v`) |
+| `--no-gps` | off | Disable GPS fallback |
+| `--gps-host` | from config | GPS2IP host (enables fallback) |
+| `--gps-port` | `11123` | GPS2IP TCP port |
+| `--console` | off | Plain console output instead of TUI |
+| `--nmea` | off | Include NMEA sentences (console mode) |
+| `--no-meters` | off | Disable rig meters |
+| `--wsjtx` | off | Send grid to WSJT-X via UDP |
+| `--wsjtx-host` | `127.0.0.1` | WSJT-X UDP host |
+| `--wsjtx-port` | `2237` | WSJT-X UDP port |
 
-## rigctld setup
+## rigctld
+
+rigtop auto-starts `rigctld` when `[rigctld]` is in the config. The log level
+maps to rigctld verbosity: WARNING → `-v`, INFO → `-vvv`, DEBUG → `-vvvvv`.
+
+To run rigctld manually instead:
 
 ```bash
-# Linux
-rigctld -m 3085 -r /dev/ttyUSB0 -s 115200
-
 # Windows
-rigctld -m 3085 -r COM9 -s 115200
+rigctld -m 3085 -r COM9 -s 19200 -T 127.0.0.1 -t 4532 -vvv
+
+# Linux
+rigctld -m 3085 -r /dev/ttyUSB0 -s 19200 -T 127.0.0.1 -t 4532 -vvv
 ```
 
-Model 3085 = IC-705. Adjust serial port and baud rate for your setup.
+Model 3085 = IC-705. Use `--no-rigctld` to skip auto-launch.

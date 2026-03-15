@@ -3,8 +3,8 @@
 import socket
 import struct
 
-from nmead.sinks import PositionSink, register_sink
-from nmead.sources import Position
+from rigtop.sinks import PositionSink, register_sink
+from rigtop.sources import Position
 
 
 @register_sink("wsjtx")
@@ -15,7 +15,7 @@ class WsjtxSink(PositionSink):
     SCHEMA_VERSION = 2
     MSG_TYPE_LOCATION = 11
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 2237, client_id: str = "nmead"):
+    def __init__(self, host: str = "127.0.0.1", port: int = 2237, client_id: str = "rigtop"):
         self.host = host
         self.port = port
         self.client_id = client_id
