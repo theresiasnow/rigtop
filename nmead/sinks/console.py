@@ -15,7 +15,7 @@ class ConsoleSink(PositionSink):
     def start(self) -> None:
         pass
 
-    def send(self, pos: Position, grid: str) -> str | None:
+    def send(self, pos: Position, grid: str, **kwargs) -> str | None:
         print(f"  Position: {format_position(pos.lat, pos.lon)}  Grid: {grid}")
         print(f"  Decimal:  {pos.lat:.6f}, {pos.lon:.6f}")
         if self.nmea:

@@ -29,7 +29,7 @@ class WsjtxSink(PositionSink):
         encoded = s.encode("utf-8")
         return struct.pack(">I", len(encoded)) + encoded
 
-    def send(self, pos: Position, grid: str) -> str | None:
+    def send(self, pos: Position, grid: str, **kwargs) -> str | None:
         if grid == self._last_grid:
             return None  # Skip if unchanged
         self._last_grid = grid

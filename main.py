@@ -61,6 +61,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Include NMEA sentences in console output",
     )
     sink_group.add_argument(
+        "--meters", action="store_true", default=False,
+        help="Show rig meter values (ALC, SWR, power, etc.) from rigctld",
+    )
+    sink_group.add_argument(
+        "--tui", action="store_true", default=False,
+        help="Live dashboard with meters and rig info (implies --meters)",
+    )
+    sink_group.add_argument(
         "--wsjtx", action="store_true", default=False,
         help="Send grid locator to WSJT-X via UDP",
     )
@@ -87,6 +95,8 @@ def main():
         cfg.interval = args.interval
     if args.once is not None and args.once:
         cfg.once = True
+    if args.meters or args.tui:
+        cfg.meters = True
 
     # Source: CLI overrides config file
     if args.source is not None:
@@ -98,7 +108,9 @@ def main():
 
     # Sinks: CLI flags build sink list; if none given, fall back to config
     cli_sinks: list[dict] = []
-    if args.console or args.nmea:
+    if args.tui:
+        cli_sinks.append({"type": "tui"})
+    elif args.console or args.nmea:
         sink_cfg: dict = {"type": "console"}
         if args.nmea:
             sink_cfg["nmea"] = True
@@ -131,7 +143,7 @@ def main():
 
     # --- Run ---
     try:
-        run(source, sinks, interval=cfg.interval, once=cfg.once)
+        run(source, sinks, interval=cfg.interval, once=cfg.once, meters=cfg.meters)
     finally:
         source.close()
         for sink in sinks:

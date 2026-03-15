@@ -15,8 +15,14 @@ class PositionSink(ABC):
     def start(self) -> None: ...
 
     @abstractmethod
-    def send(self, pos: Position, grid: str) -> str | None:
-        """Send position data. Returns optional status message for logging."""
+    def send(self, pos: Position, grid: str, **kwargs) -> str | None:
+        """Send position data. Returns optional status message for logging.
+
+        Optional kwargs (sources may provide):
+            freq:    Frequency string (Hz)
+            mode:    Operating mode string
+            meters:  dict[str, float] of rig meter readings
+        """
 
     @abstractmethod
     def close(self) -> None: ...
@@ -59,4 +65,5 @@ def create_sink(config: dict[str, Any]) -> PositionSink:
 
 # Import concrete sinks to trigger registration
 import nmead.sinks.console as _console  # noqa: F401, E402
+import nmead.sinks.tui as _tui  # noqa: F401, E402
 import nmead.sinks.wsjtx as _wsjtx  # noqa: F401, E402

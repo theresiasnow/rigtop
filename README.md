@@ -8,6 +8,7 @@ Read GPS/NMEA position from various sources and forward to multiple sinks.
 
 **Sinks:**
 - **console** — Terminal output with position, grid, optional NMEA sentences
+- **tui** — Live dashboard with meters, rig info, and position (using rich)
 - **wsjtx** — Send Maidenhead grid locator to WSJT-X via UDP
 
 ## Prerequisites
@@ -24,6 +25,9 @@ uv sync
 ## Quick start
 
 ```bash
+# GPS2IP → TUI dashboard + WSJT-X (main setup)
+uv run python main.py --source gps2ip --source-host 192.168.50.162 --source-port 11123 --tui --wsjtx
+
 # IC-705 via rigctld (defaults: localhost:4532, console output)
 uv run python main.py
 
@@ -32,6 +36,15 @@ uv run python main.py --source gps2ip --source-host 192.168.1.100 --source-port 
 
 # Read once, with NMEA output
 uv run python main.py --once --nmea
+
+# Show rig meters (ALC, SWR, power, etc.)
+uv run python main.py --meters
+
+# Live TUI dashboard (implies --meters)
+uv run python main.py --tui
+
+# TUI + WSJT-X
+uv run python main.py --tui --wsjtx
 
 # Send to WSJT-X + console output
 uv run python main.py --console --wsjtx
@@ -53,6 +66,7 @@ Copy `nmead.example.toml` to `nmead.toml` and edit. CLI flags override config va
 ```toml
 [general]
 interval = 2.0
+meters = false
 
 [source]
 type = "rigctld"
@@ -62,6 +76,9 @@ port = 4532
 [[sink]]
 type = "console"
 nmea = false
+
+# [[sink]]
+# type = "tui"
 
 [[sink]]
 type = "wsjtx"
@@ -76,6 +93,8 @@ port = 2237
 | `-c, --config`   | —             | Path to TOML config file              |
 | `--interval`     | `2.0`         | Poll interval in seconds              |
 | `--once`         | off           | Read position once and exit           |
+| `--meters`       | off           | Show rig meter values (ALC, SWR, etc.)|
+| `--tui`          | off           | Live dashboard (implies --meters)     |
 | `--source`       | `rigctld`     | GPS source type: `rigctld`, `gps2ip`  |
 | `--source-host`  | varies        | Source host address                   |
 | `--source-port`  | varies        | Source TCP port                       |

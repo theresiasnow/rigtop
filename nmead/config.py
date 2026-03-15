@@ -21,6 +21,7 @@ class Config:
 
     interval: float = 2.0
     once: bool = False
+    meters: bool = False
     source: dict = field(default_factory=lambda: {"type": "rigctld"})
     sinks: list[dict] = field(default_factory=lambda: [{"type": "console"}])
 
@@ -44,6 +45,7 @@ def load_config(path: Path | None) -> Config:
     return Config(
         interval=general.get("interval", 2.0),
         once=general.get("once", False),
+        meters=general.get("meters", False),
         source=source,
         sinks=sinks,
     )

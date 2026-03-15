@@ -1,0 +1,16 @@
+[general]
+interval = 2.0
+meters = true
+
+[source]
+type = "gps2ip"
+host = "192.168.50.162"
+port = 11123
+
+[[sink]]
+type = "console"
+
+[[sink]]
+type = "wsjtx"
+host = "127.0.0.1"
+port = 2237

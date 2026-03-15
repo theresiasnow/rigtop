@@ -1,8 +1,15 @@
 """GPS source: IC-705 (and other rigs) via Hamlib rigctld."""
 
+from __future__ import annotations
+
 import socket
 
 from nmead.sources import GpsSource, Position, register_source
+
+#: Meter levels available during TX
+TX_METERS = ["ALC", "SWR", "RFPOWER_METER", "COMP_METER", "ID_METER", "VD_METER"]
+#: Meter levels available during RX
+RX_METERS = ["STRENGTH"]
 
 
 @register_source("rigctld")
@@ -93,6 +100,38 @@ class RigctldSource(GpsSource):
                 return line.split(":", 1)[1].strip()
         lines = resp.splitlines()
         return lines[0].strip() if lines else None
+
+    def get_level(self, level: str) -> float | None:
+        """Read a single rig level value, e.g. 'ALC', 'SWR', 'STRENGTH'."""
+        resp = self._send_command(f"+\\get_level {level}")
+        for line in resp.splitlines():
+            line = line.strip()
+            if line.startswith("Level Value:"):
+                try:
+                    return float(line.split(":", 1)[1].strip())
+                except ValueError:
+                    return None
+        # Fallback: plain numeric response
+        for line in resp.splitlines():
+            line = line.strip()
+            if not line or line.startswith("RPRT"):
+                continue
+            try:
+                return float(line)
+            except ValueError:
+                continue
+        return None
+
+    def get_meters(self, levels: list[str] | None = None) -> dict[str, float]:
+        """Read multiple rig levels. Returns {name: value} for successful reads."""
+        if levels is None:
+            levels = TX_METERS + RX_METERS
+        result: dict[str, float] = {}
+        for lvl in levels:
+            val = self.get_level(lvl)
+            if val is not None:
+                result[lvl] = val
+        return result
 
     def __str__(self) -> str:
         return f"rigctld@{self.host}:{self.port}"
