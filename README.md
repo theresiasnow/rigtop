@@ -36,6 +36,9 @@ uv run python main.py --once --nmea
 # Send to WSJT-X + console output
 uv run python main.py --console --wsjtx
 
+# GPS2IP → console + WSJT-X on localhost
+uv run python main.py --source gps2ip --source-host 192.168.50.162 --source-port 11123 --wsjtx --console
+
 # WSJT-X on another machine
 uv run python main.py --wsjtx --wsjtx-host 192.168.1.50 --wsjtx-port 2237
 
