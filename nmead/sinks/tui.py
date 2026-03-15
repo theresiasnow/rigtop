@@ -16,6 +16,7 @@ from nmead.sources import Position
 
 METER_ORDER = [
     "STRENGTH",
+    "RFPOWER",
     "ALC",
     "SWR",
     "RFPOWER_METER",
@@ -26,9 +27,10 @@ METER_ORDER = [
 
 METER_LABELS = {
     "STRENGTH": "S-meter",
+    "RFPOWER": "TX pwr",
     "ALC": "ALC",
     "SWR": "SWR",
-    "RFPOWER_METER": "Power",
+    "RFPOWER_METER": "Pwr out",
     "COMP_METER": "Comp",
     "ID_METER": "Id",
     "VD_METER": "Vd",
@@ -76,6 +78,8 @@ def _meter_bar(name: str, value: float, width: int = 20) -> Text:
         val_str = f"{_s_meter_text(value)} ({value:+.0f} dB)"
     elif name == "SWR":
         val_str = f"{value:.1f}:1"
+    elif name == "RFPOWER":
+        val_str = f"{value * 100:.0f}%"
     else:
         val_str = f"{value:.2f}"
 
@@ -84,6 +88,13 @@ def _meter_bar(name: str, value: float, width: int = 20) -> Text:
     line.append(f"  {label:<8} ", style="bold")
     line.append(bar, style=colour)
     line.append(f"  {val_str}")
+
+    # Warning tags for dangerous values
+    if name == "SWR" and value >= 3.0:
+        line.append("  ⚠ HIGH", style="bold red blink")
+    elif name == "ALC" and value >= 0.8:
+        line.append("  ⚠ HIGH", style="bold red blink")
+
     return line
 
 
@@ -109,12 +120,14 @@ class TuiSink(PositionSink):
     def send(self, pos: Position, grid: str, **kwargs) -> str | None:
         freq: str | None = kwargs.get("freq")
         mode: str | None = kwargs.get("mode")
+        passband: int | None = kwargs.get("passband")
+        ptt: bool | None = kwargs.get("ptt")
         meters: dict[str, float] = kwargs.get("meters") or {}
         source_label: str = kwargs.get("source_label", "")
         gps_src: str = kwargs.get("gps_src", "")
         now = datetime.datetime.now().strftime("%H:%M:%S")
 
-        # ── Left pane: GPS & Rig ──
+        # ── Left pane: GPS ──
         left = Text()
         left.append(f" {format_position(pos.lat, pos.lon)}\n", style="bold white")
         left.append(f" {pos.lat:.6f}, {pos.lon:.6f}\n")
@@ -123,21 +136,34 @@ class TuiSink(PositionSink):
         if gps_src:
             left.append(f" GPS   ", style="dim")
             left.append(f"{gps_src}\n", style="bold" if gps_src == "rig" else "yellow")
-        left.append("\n")
-        if freq or mode:
-            freq_str = f"{float(freq) / 1e6:.6f} MHz" if freq else "—"
-            left.append(f" {freq_str}   {mode or '—'}\n", style="bold yellow")
         left.append(f"\n {now}", style="dim")
 
         left_panel = Panel(
             left,
-            title="[bold]GPS / Rig[/bold]",
+            title="[bold]GPS[/bold]",
             border_style="green",
             expand=True,
         )
 
-        # ── Right pane: Meters ──
+        # ── Right pane: Rig & Meters ──
         right = Text()
+
+        # PTT indicator
+        if ptt is True:
+            right.append(" ● TX\n", style="bold red")
+        elif ptt is False:
+            right.append(" ● RX\n", style="bold green")
+
+        # Frequency / mode / passband
+        if freq or mode:
+            freq_str = f"{float(freq) / 1e6:.6f} MHz" if freq else "—"
+            mode_str = mode or "—"
+            if passband and passband > 0:
+                mode_str += f" ({passband} Hz)"
+            right.append(f" {freq_str}   {mode_str}\n", style="bold yellow")
+        right.append("\n")
+
+        # Meter bars
         if meters:
             for name in METER_ORDER:
                 if name in meters:
@@ -146,10 +172,13 @@ class TuiSink(PositionSink):
         else:
             right.append(" No meter data", style="dim")
 
+        # Border turns red on TX with high SWR or ALC
+        warn = (ptt is True and
+                (meters.get("SWR", 0) >= 3.0 or meters.get("ALC", 0) >= 0.8))
         right_panel = Panel(
             right,
-            title="[bold]Meters[/bold]",
-            border_style="cyan",
+            title="[bold]Rig / Meters[/bold]",
+            border_style="red bold" if warn else "cyan",
             expand=True,
         )
 
@@ -158,11 +187,11 @@ class TuiSink(PositionSink):
         if source_label:
             title += f"  [dim]{source_label}[/dim]"
 
-        layout = Columns([left_panel, right_panel], equal=True, expand=True)
+        layout = Columns([right_panel, left_panel], equal=True, expand=True)
         outer = Panel(
             layout,
             title=title,
-            subtitle="[dim]Ctrl+C to stop[/dim]",
+            subtitle="[dim]q to quit[/dim]",
             border_style="blue",
         )
 

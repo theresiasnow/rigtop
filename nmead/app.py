@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import datetime
+import sys
+import threading
 import time
 
 from nmead.geo import maidenhead
@@ -13,6 +15,57 @@ from nmead.sources.rigctld import RigctldSource
 
 def _is_tui(sink: PositionSink) -> bool:
     return getattr(sink, "tui", False)
+
+
+def _key_listener(stop: threading.Event) -> None:
+    """Background thread: watch for 'q' or ':q' to signal exit."""
+    if sys.platform == "win32":
+        import msvcrt
+        buf = ""
+        while not stop.is_set():
+            if msvcrt.kbhit():
+                ch = msvcrt.getwch()
+                if ch in ("\r", "\n"):
+                    if buf.strip() in ("q", ":q"):
+                        stop.set()
+                        return
+                    buf = ""
+                elif ch == "\x03":  # Ctrl+C
+                    stop.set()
+                    return
+                else:
+                    buf += ch
+                    # Single 'q' without needing Enter
+                    if buf == "q":
+                        stop.set()
+                        return
+            else:
+                time.sleep(0.1)
+    else:
+        import tty
+        import termios
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        try:
+            tty.setcbreak(fd)
+            buf = ""
+            while not stop.is_set():
+                ch = sys.stdin.read(1)
+                if ch in ("\r", "\n"):
+                    if buf.strip() in ("q", ":q"):
+                        stop.set()
+                        return
+                    buf = ""
+                elif ch == "\x03":
+                    stop.set()
+                    return
+                else:
+                    buf += ch
+                    if buf == "q":
+                        stop.set()
+                        return
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
 
 def run(
@@ -29,6 +82,10 @@ def run(
     Frequency, mode, and meters always come from *rig*.
     """
     has_tui = any(_is_tui(s) for s in sinks)
+
+    stop = threading.Event()
+    key_thread = threading.Thread(target=_key_listener, args=(stop,), daemon=True)
+    key_thread.start()
 
     if not has_tui:
         print(f"Rig:      {rig}")
@@ -56,14 +113,22 @@ def run(
                 grid = maidenhead(pos.lat, pos.lon)
 
                 # Rig data (always from rigctld)
+                mode, passband = rig.get_mode_and_passband()
                 extras: dict = {
                     "source_label": str(rig),
                     "gps_src": gps_src,
                     "freq": rig.get_frequency(),
-                    "mode": rig.get_mode(),
+                    "mode": mode,
+                    "passband": passband,
+                    "ptt": rig.get_ptt(),
                 }
                 if meters:
-                    extras["meters"] = rig.get_meters()
+                    m = rig.get_meters()
+                    # Also grab TX power setting (0-1)
+                    rfpower = rig.get_level("RFPOWER")
+                    if rfpower is not None:
+                        m["RFPOWER"] = rfpower
+                    extras["meters"] = m
 
                 # Print summary (non-TUI only)
                 if not has_tui:
@@ -97,10 +162,15 @@ def run(
             if once:
                 break
 
-            time.sleep(interval)
+            # Sleep in short intervals so we can react to 'q' quickly
+            for _ in range(int(interval * 10)):
+                if stop.is_set():
+                    break
+                time.sleep(0.1)
+            if stop.is_set():
+                break
 
         except KeyboardInterrupt:
-            print("\nStopped.")
             break
         except ConnectionError as e:
             print(f"Connection lost: {e}")

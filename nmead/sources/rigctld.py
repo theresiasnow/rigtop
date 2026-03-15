@@ -92,14 +92,48 @@ class RigctldSource(GpsSource):
                 pass
         return None
 
-    def get_mode(self) -> str | None:
+    def get_mode_and_passband(self) -> tuple[str | None, int | None]:
+        """Return (mode, passband_hz).  Passband is 0 when 'normal'."""
         resp = self._send_command("+\\get_mode")
-        for line in resp.splitlines():
+        lines = resp.splitlines()
+        mode: str | None = None
+        passband: int | None = None
+        for line in lines:
             line = line.strip()
             if line.startswith("Mode:"):
-                return line.split(":", 1)[1].strip()
-        lines = resp.splitlines()
-        return lines[0].strip() if lines else None
+                mode = line.split(":", 1)[1].strip()
+            elif line.startswith("Passband:"):
+                try:
+                    passband = int(line.split(":", 1)[1].strip())
+                except ValueError:
+                    pass
+        # Fallback: two-line response  mode\npassband
+        if mode is None and len(lines) >= 1:
+            mode = lines[0].strip() or None
+        if passband is None and len(lines) >= 2:
+            try:
+                passband = int(lines[1].strip())
+            except ValueError:
+                pass
+        return mode, passband
+
+    def get_mode(self) -> str | None:
+        mode, _ = self.get_mode_and_passband()
+        return mode
+
+    def get_ptt(self) -> bool | None:
+        """Return True if transmitting, False if receiving, None on error."""
+        resp = self._send_command("+\\get_ptt")
+        for line in resp.splitlines():
+            line = line.strip()
+            if line.startswith("PTT:"):
+                return line.split(":", 1)[1].strip() != "0"
+            # Plain numeric response
+            try:
+                return int(line) != 0
+            except ValueError:
+                continue
+        return None
 
     def get_level(self, level: str) -> float | None:
         """Read a single rig level value, e.g. 'ALC', 'SWR', 'STRENGTH'."""
