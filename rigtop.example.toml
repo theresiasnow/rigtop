@@ -19,6 +19,15 @@ port = 4532            # rigctld TCP port
 model = 3085           # Hamlib rig model (3085 = IC-705)
 serial_port = "COM9"  # serial port (COM9, /dev/ttyUSB0, etc.)
 baud_rate = 19200      # serial baud rate (1200..115200)
+data_bits = 8          # data bits (5..8)
+stop_bits = 1          # stop bits (1 or 2)
+serial_parity = "None" # parity: None, Odd, Even, Mark, Space
+serial_handshake = "None" # handshake: None, XONXOFF, Hardware
+dtr_state = "Unset"    # DTR state: Unset, ON, OFF
+rts_state = "Unset"    # RTS state: Unset, ON, OFF
+ptt_type = "RIG"       # PTT type: RIG, RIGMICDATA, DTR, RTS, Parallel, CM108, GPIO, GPION, None
+ptt_pathname = ""      # PTT device path (e.g. COM10, /dev/ttyUSB1) — blank = same as rig
+ptt_share = false      # true to share PTT port with other apps
 
 # --- GPS Fallback (optional) ---
 # If the rig has no GPS fix, fall back to iOS GPS2IP app.

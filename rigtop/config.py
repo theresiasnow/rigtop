@@ -31,10 +31,51 @@ class RigConfig(BaseModel):
     port: int = Field(default=4532, ge=1, le=65535)
 
 
+class Parity(str, Enum):
+    NONE = "None"
+    ODD = "Odd"
+    EVEN = "Even"
+    MARK = "Mark"
+    SPACE = "Space"
+
+
+class Handshake(str, Enum):
+    NONE = "None"
+    XONXOFF = "XONXOFF"
+    HARDWARE = "Hardware"
+
+
+class DtrRtsState(str, Enum):
+    UNSET = "Unset"
+    ON = "ON"
+    OFF = "OFF"
+
+
+class PttType(str, Enum):
+    RIG = "RIG"
+    RIGMICDATA = "RIGMICDATA"
+    DTR = "DTR"
+    RTS = "RTS"
+    PARALLEL = "Parallel"
+    CM108 = "CM108"
+    GPIO = "GPIO"
+    GPION = "GPION"
+    NONE = "None"
+
+
 class RigctldConfig(BaseModel):
     model: int = 3085
     serial_port: str = "COM9"
     baud_rate: int = 19200
+    data_bits: Literal[5, 6, 7, 8] = 8
+    stop_bits: Literal[1, 2] = 1
+    serial_parity: Parity = Parity.NONE
+    serial_handshake: Handshake = Handshake.NONE
+    dtr_state: DtrRtsState = DtrRtsState.UNSET
+    rts_state: DtrRtsState = DtrRtsState.UNSET
+    ptt_type: PttType = PttType.RIG
+    ptt_pathname: str = ""
+    ptt_share: bool = False
 
     @field_validator("baud_rate")
     @classmethod

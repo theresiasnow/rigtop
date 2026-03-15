@@ -26,6 +26,15 @@ class RigctldLauncher:
         model: int = 3085,
         serial_port: str = "COM9",
         baud_rate: int = 19200,
+        data_bits: int = 8,
+        stop_bits: int = 1,
+        serial_parity: str = "None",
+        serial_handshake: str = "None",
+        dtr_state: str = "Unset",
+        rts_state: str = "Unset",
+        ptt_type: str = "RIG",
+        ptt_pathname: str = "",
+        ptt_share: bool = False,
         listen_host: str = "127.0.0.1",
         listen_port: int = 4532,
         log_level: str = "WARNING",
@@ -34,6 +43,15 @@ class RigctldLauncher:
         self.model = model
         self.serial_port = serial_port
         self.baud_rate = baud_rate
+        self.data_bits = data_bits
+        self.stop_bits = stop_bits
+        self.serial_parity = serial_parity
+        self.serial_handshake = serial_handshake
+        self.dtr_state = dtr_state
+        self.rts_state = rts_state
+        self.ptt_type = ptt_type
+        self.ptt_pathname = ptt_pathname
+        self.ptt_share = ptt_share
         self.listen_host = listen_host
         self.listen_port = listen_port
         self.log_level = log_level.upper()
@@ -56,6 +74,24 @@ class RigctldLauncher:
             "-T", self.listen_host,
             "-t", str(self.listen_port),
         ]
+        # PTT flags.
+        if self.ptt_type != "RIG":
+            cmd.extend(["-P", self.ptt_type])
+        if self.ptt_pathname:
+            cmd.extend(["-p", self.ptt_pathname])
+        # Serial & PTT configuration via -C key=value flags.
+        conf = {
+            "data_bits": str(self.data_bits),
+            "stop_bits": str(self.stop_bits),
+            "serial_parity": self.serial_parity,
+            "serial_handshake": self.serial_handshake,
+            "dtr_state": self.dtr_state,
+            "rts_state": self.rts_state,
+        }
+        if self.ptt_share:
+            conf["ptt_share"] = "1"
+        for key, value in conf.items():
+            cmd.extend(["-C", f"{key}={value}"])
         v_count = _VERBOSITY.get(self.log_level, 1)
         if v_count:
             cmd.append("-" + "v" * v_count)
