@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 
 from rich.console import Console
+from rich.columns import Columns
 from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
@@ -110,59 +111,63 @@ class TuiSink(PositionSink):
         mode: str | None = kwargs.get("mode")
         meters: dict[str, float] = kwargs.get("meters") or {}
         source_label: str = kwargs.get("source_label", "")
+        gps_src: str = kwargs.get("gps_src", "")
         now = datetime.datetime.now().strftime("%H:%M:%S")
 
-        parts: list[Text | str] = []
-
-        # ── Position ──
-        parts.append(
-            Text(f"  {format_position(pos.lat, pos.lon)}", style="bold white")
-        )
-        parts.append(f"  {pos.lat:.6f}, {pos.lon:.6f}")
-        parts.append(Text(f"  Grid  {grid}", style="bold green"))
-        parts.append("")
-
-        # ── Rig info ──
+        # ── Left pane: GPS & Rig ──
+        left = Text()
+        left.append(f" {format_position(pos.lat, pos.lon)}\n", style="bold white")
+        left.append(f" {pos.lat:.6f}, {pos.lon:.6f}\n")
+        left.append(f" Grid  ", style="dim")
+        left.append(f"{grid}\n", style="bold green")
+        if gps_src:
+            left.append(f" GPS   ", style="dim")
+            left.append(f"{gps_src}\n", style="bold" if gps_src == "rig" else "yellow")
+        left.append("\n")
         if freq or mode:
             freq_str = f"{float(freq) / 1e6:.6f} MHz" if freq else "—"
-            parts.append(
-                Text(f"  {freq_str}   {mode or '—'}", style="bold yellow")
-            )
-            parts.append("")
+            left.append(f" {freq_str}   {mode or '—'}\n", style="bold yellow")
+        left.append(f"\n {now}", style="dim")
 
-        # ── Meters ──
+        left_panel = Panel(
+            left,
+            title="[bold]GPS / Rig[/bold]",
+            border_style="green",
+            expand=True,
+        )
+
+        # ── Right pane: Meters ──
+        right = Text()
         if meters:
             for name in METER_ORDER:
                 if name in meters:
-                    parts.append(_meter_bar(name, meters[name]))
-            parts.append("")
+                    right.append_text(_meter_bar(name, meters[name]))
+                    right.append("\n")
+        else:
+            right.append(" No meter data", style="dim")
 
-        # ── Footer ──
-        parts.append(Text(f"  {now}", style="dim"))
+        right_panel = Panel(
+            right,
+            title="[bold]Meters[/bold]",
+            border_style="cyan",
+            expand=True,
+        )
 
-        # Assemble into a single Text renderable
-        body = Text()
-        for i, part in enumerate(parts):
-            if i > 0:
-                body.append("\n")
-            if isinstance(part, Text):
-                body.append_text(part)
-            else:
-                body.append(part)
-
+        # ── Combine side by side ──
         title = "[bold]nmead[/bold]"
         if source_label:
             title += f"  [dim]{source_label}[/dim]"
 
-        panel = Panel(
-            body,
+        layout = Columns([left_panel, right_panel], equal=True, expand=True)
+        outer = Panel(
+            layout,
             title=title,
             subtitle="[dim]Ctrl+C to stop[/dim]",
             border_style="blue",
         )
 
         if self._live:
-            self._live.update(panel)
+            self._live.update(outer)
 
         return None
 

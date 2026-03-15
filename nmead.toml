@@ -2,13 +2,16 @@
 interval = 2.0
 meters = true
 
-[source]
-type = "gps2ip"
+[rig]
+host = "127.0.0.1"
+port = 4532
+
+[gps_fallback]
 host = "192.168.50.162"
 port = 11123
 
 [[sink]]
-type = "console"
+type = "tui"
 
 [[sink]]
 type = "wsjtx"

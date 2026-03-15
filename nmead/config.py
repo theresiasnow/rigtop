@@ -22,7 +22,8 @@ class Config:
     interval: float = 2.0
     once: bool = False
     meters: bool = False
-    source: dict = field(default_factory=lambda: {"type": "rigctld"})
+    rig: dict = field(default_factory=lambda: {"host": "127.0.0.1", "port": 4532})
+    gps_fallback: dict | None = None
     sinks: list[dict] = field(default_factory=lambda: [{"type": "console"}])
 
 
@@ -35,7 +36,8 @@ def load_config(path: Path | None) -> Config:
         data = tomllib.load(f)
 
     general = data.get("general", {})
-    source = data.get("source", {"type": "rigctld"})
+    rig = data.get("rig", {"host": "127.0.0.1", "port": 4532})
+    gps_fallback = data.get("gps_fallback")
     sinks = data.get("sink", [{"type": "console"}])
 
     # Ensure sinks is a list (TOML [[sink]] gives a list, [sink] gives a dict)
@@ -46,6 +48,7 @@ def load_config(path: Path | None) -> Config:
         interval=general.get("interval", 2.0),
         once=general.get("once", False),
         meters=general.get("meters", False),
-        source=source,
+        rig=rig,
+        gps_fallback=gps_fallback,
         sinks=sinks,
     )
