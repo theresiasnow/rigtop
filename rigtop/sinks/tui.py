@@ -92,12 +92,28 @@ class TuiLogBuffer:
 class AprsBuffer:
     """Ring buffer of incoming APRS-IS packets for a dedicated TUI pane."""
 
+    #: Path tokens that indicate the packet was heard on RF and gated
+    _RF_TOKENS = {"qAR", "qAr", "qAo", "qAO"}
+
     def __init__(self, maxlen: int = 200) -> None:
-        self._lines: deque[str] = deque(maxlen=maxlen)
+        self._lines: deque[tuple[str, str]] = deque(maxlen=maxlen)  # (source, formatted)
+
+    @staticmethod
+    def _classify(raw: str) -> str:
+        """Return ``'rf'`` if the packet was gated from RF, else ``'is'``."""
+        # APRS-IS format: CALL>PATH:payload — check the path portion
+        if ">" in raw:
+            header = raw.split(":", 1)[0]  # everything before payload
+            path = header.split(">", 1)[1] if ">" in header else ""
+            tokens = {t.strip().rstrip("*") for t in path.split(",")}
+            if tokens & AprsBuffer._RF_TOKENS:
+                return "rf"
+        return "is"
 
     def push(self, line: str) -> None:
         ts = datetime.datetime.now().strftime("%H:%M:%S")
-        self._lines.append(f"{ts}  {line}")
+        source = self._classify(line)
+        self._lines.append((source, f"{ts}  {line}"))
 
     def render(self, max_lines: int = 8) -> Text:
         tail = list(self._lines)[-max_lines:]
@@ -105,8 +121,9 @@ class AprsBuffer:
         if not tail:
             txt.append(" (no APRS traffic)", style="dim")
             return txt
-        for i, line in enumerate(tail):
-            txt.append(f" {line}", style="cyan")
+        for i, (source, line) in enumerate(tail):
+            style = "green" if source == "rf" else "cyan"
+            txt.append(f" {line}", style=style)
             if i < len(tail) - 1:
                 txt.append("\n")
         return txt
