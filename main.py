@@ -187,7 +187,7 @@ def main():
 
     # --- Optional GPS fallback ---
     gps_fallback = None
-    if cfg.gps_fallback is not None:
+    if cfg.gps_fallback is not None and cfg.gps_fallback.enabled:
         gps_fallback = Gps2ipSource(
             host=cfg.gps_fallback.host,
             port=cfg.gps_fallback.port,
@@ -208,10 +208,21 @@ def main():
         except Exception as e:
             logger.warning("Sink {} failed to start: {}", sink, e)
 
+    # --- Static GPS fallback (last resort) ---
+    static_pos = None
+    if cfg.gps_static is not None and cfg.gps_static.enabled:
+        from rigtop.sources import Position
+        static_pos = Position(
+            lat=cfg.gps_static.lat,
+            lon=cfg.gps_static.lon,
+            alt=cfg.gps_static.alt,
+        )
+
     # --- Run ---
     try:
         run(rig, sinks, interval=cfg.interval, once=cfg.once, meters=cfg.meters,
-            gps_fallback=gps_fallback, watchdog=cfg.watchdog)
+            gps_fallback=gps_fallback, watchdog=cfg.watchdog,
+            static_pos=static_pos)
     finally:
         rig.close()
         if dw_client:

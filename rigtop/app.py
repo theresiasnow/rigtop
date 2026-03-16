@@ -12,7 +12,7 @@ from loguru import logger
 from rigtop.config import WatchdogConfig
 from rigtop.geo import maidenhead
 from rigtop.sinks import PositionSink
-from rigtop.sources import GpsSource
+from rigtop.sources import GpsSource, Position
 from rigtop.sources.rigctld import RigctldSource
 
 
@@ -116,10 +116,12 @@ def run(
     meters: bool = False,
     gps_fallback: GpsSource | None = None,
     watchdog: WatchdogConfig | None = None,
+    static_pos: Position | None = None,
 ) -> None:
     """Main polling loop.
 
     GPS is read from *rig* first.  If no fix, *gps_fallback* is tried.
+    If neither has a fix, *static_pos* (from config) is used as last resort.
     Frequency, mode, and meters always come from *rig*.
     """
     has_tui = any(_is_tui(s) for s in sinks)
@@ -149,6 +151,9 @@ def run(
             if pos is None and gps_fallback:
                 pos = gps_fallback.get_position()
                 gps_src = "fallback"
+            if pos is None and static_pos is not None:
+                pos = static_pos
+                gps_src = "static"
 
             now_str = datetime.datetime.now().strftime("%H:%M:%S")
 

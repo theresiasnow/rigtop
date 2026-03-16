@@ -24,8 +24,15 @@ ptt_pathname = ""
 ptt_share = false
 
 [gps_fallback]
+enabled = true
 host = "192.168.50.162"
 port = 11123
+
+[gps_static]
+enabled = true
+lat = 59.329
+lon = 18.069
+alt = 28.0
 
 [aprs]
 qsy_freq = 144.800     # APRS frequency in MHz (EU: 144.800, NA: 144.390)

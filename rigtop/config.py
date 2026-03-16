@@ -79,8 +79,17 @@ class RigctldConfig(BaseModel):
 
 
 class GpsConfig(BaseModel):
+    enabled: bool = True
     host: str = "192.168.1.1"
     port: int = Field(default=11123, ge=1, le=65535)
+
+
+class GpsStaticConfig(BaseModel):
+    """Hard-coded GPS position — used when rig and fallback have no fix."""
+    enabled: bool = True
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    alt: float | None = None
 
 
 class WatchdogConfig(BaseModel):
@@ -142,6 +151,7 @@ class Config(BaseModel):
     rig: RigConfig = Field(default_factory=RigConfig)
     rigctld: RigctldConfig | None = None
     gps_fallback: GpsConfig | None = None
+    gps_static: GpsStaticConfig | None = None
     aprs: AprsConfig | None = None
     direwolf: DirewolfConfig | None = None
     watchdog: WatchdogConfig | None = None

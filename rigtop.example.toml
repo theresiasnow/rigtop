@@ -33,8 +33,18 @@ ptt_share = false      # true to share PTT port with other apps
 # If the rig has no GPS fix, fall back to iOS GPS2IP app.
 # Remove this section or use --no-gps to disable.
 [gps_fallback]
+enabled = true
 host = "192.168.1.100" # GPS2IP app host address
 port = 11123            # GPS2IP TCP port
+
+# --- Static GPS Position (optional) ---
+# Hard-coded position used when neither rig GPS nor fallback have a fix.
+# Useful for fixed/home stations. Remove this section to disable.
+# [gps_static]
+# enabled = true
+# lat = 59.329           # latitude (decimal degrees)
+# lon = 18.069           # longitude (decimal degrees)
+# alt = 28.0             # altitude in metres (optional)
 
 # --- APRS ---
 # QSY rig to APRS frequency on startup.
