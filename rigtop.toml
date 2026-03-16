@@ -27,29 +27,41 @@ ptt_share = false
 host = "192.168.50.162"
 port = 11123
 
+[aprs]
+qsy_freq = 144.800     # APRS frequency in MHz (EU: 144.800, NA: 144.390)
+qsy_mode = "FM"
+
 [[sink]]
 type = "tui"
+enabled = true
 
 [[sink]]
 type = "wsjtx"
+enabled = true
 host = "127.0.0.1"
 port = 2237
 
 [[sink]]
-type = "direwolf"
+type = "nmea"
+enabled = true
 device = "COM10"       # rigtop writes here (VSPD pair COM10↔COM11)
 
 [[sink]]
-type = "direwolf"
+type = "nmea"
+enabled = true
 device = "COM12"       # rigtop writes here (VSPD pair COM12↔COM13)
 
 [[sink]]
 type = "gpsd"
+enabled = true
 
 [[sink]]
 type = "aprsis"
+enabled = true
 callsign = "SA0TSS-1"
 server = "euro.aprs2.net"
+port = 14580
 passcode = "17316"
 interval = 120
 comment = "rigtop"
+aprs_filter = "r/59.2/18.1/200"  # receive APRS within 200km of Stockholm

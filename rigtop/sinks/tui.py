@@ -205,10 +205,15 @@ class TuiSink(PositionSink):
 
     # Known commands and their arguments for tab completion
     _COMMANDS: dict[str, list[str]] = {
+        "aprs": ["on", "off"],
         "clear": [],
+        "freq": [],
         "help": [],
+        "igate": ["on", "off"],
         "info": [],
         "log": ["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"],
+        "mode": ["USB", "LSB", "FM", "AM", "CW", "CWR", "RTTY", "RTTYR",
+                 "PKTUSB", "PKTLSB", "PKTFM"],
         "q": [],
         "quit": [],
     }
@@ -219,6 +224,7 @@ class TuiSink(PositionSink):
         self.log_buffer: TuiLogBuffer | None = None
         self.aprs_buffer: AprsBuffer | None = None
         self.peers: list = []  # sibling sinks (set by main.py)
+        self.rig = None  # RigctldSource reference (set by main.py)
         # Command input state (k9s-style)
         self.command_mode: bool = False
         self.command_buf: str = ""
@@ -310,7 +316,11 @@ class TuiSink(PositionSink):
         if not parts:
             return
         cmd, args = parts[0].lower(), parts[1:]
-        if cmd == "log":
+        if cmd == "aprs":
+            self._cmd_aprs(args)
+        elif cmd == "igate":
+            self._cmd_igate(args)
+        elif cmd == "log":
             self._cmd_log(args)
         elif cmd == "help":
             self._cmd_help()
@@ -318,6 +328,10 @@ class TuiSink(PositionSink):
             self._cmd_info()
         elif cmd == "clear":
             self._cmd_clear()
+        elif cmd == "mode":
+            self._cmd_mode(args)
+        elif cmd == "freq":
+            self._cmd_freq(args)
         else:
             self._set_status(f"Unknown command: {cmd}", style="red")
 
@@ -340,10 +354,13 @@ class TuiSink(PositionSink):
 
     def _cmd_help(self) -> None:
         cmds = (
+            ":aprs [on|off] – toggle APRS-IS",
             ":clear – clear log buffer",
+            ":freq <Hz|MHz> – set frequency",
             ":help – show this list",
             ":info – rig connection & status",
             ":log [LEVEL] – show/set log filter level",
+            ":mode <MODE> – set rig mode (FM, USB, …)",
             ":q / :quit – exit rigtop",
         )
         self._set_status("  ".join(cmds), style="cyan", duration=8.0)
@@ -373,6 +390,143 @@ class TuiSink(PositionSink):
         self.log_buffer._records.clear()
         self._set_status("Log cleared")
 
+    def _cmd_mode(self, args: list[str]) -> None:
+        if self.rig is None:
+            self._set_status("No rig connection", style="red")
+            return
+        if not args:
+            mode = self.rig.get_mode()
+            self._set_status(f"Current mode: {mode or '?'}", style="cyan")
+            return
+        mode = args[0].upper()
+        passband = int(args[1]) if len(args) > 1 else 0
+        if self.rig.set_mode(mode, passband):
+            self._set_status(f"Mode → {mode}" + (f" ({passband} Hz)" if passband else ""))
+        else:
+            self._set_status(f"Failed to set mode {mode}", style="red")
+
+    def _find_aprs_sinks(self) -> list:
+        """Return all APRS-related peers (aprsis + nmea sinks)."""
+        names = {"AprsIsSink", "NmeaSink"}
+        return [p for p in self.peers if type(p).__name__ in names]
+
+    @property
+    def _aprs_active(self) -> bool:
+        """True if any APRS-related sink is connected."""
+        return any(s.connected for s in self._find_aprs_sinks())
+
+    def _build_title(self, source_label: str = "") -> str:
+        """Build the outer panel title with optional APRS ON badges."""
+        title = "[bold]rigtop[/bold]"
+        if source_label:
+            title += f"  [dim]{source_label}[/dim]"
+        # Per-type APRS badges: one RF (nmea) and one IS (aprs-is)
+        rf_on = False
+        is_state = None  # None | "receiving" | "connected"
+        for sink in self._find_aprs_sinks():
+            name = type(sink).__name__
+            if name == "NmeaSink" and sink.connected:
+                rf_on = True
+            elif name == "AprsIsSink" and sink.connected:
+                if sink.receiving:
+                    is_state = "receiving"
+                elif is_state is None:
+                    is_state = "connected"
+        if rf_on:
+            title += "  [bold white on red] RF [/bold white on red]"
+        if is_state == "receiving":
+            title += "  [bold white on green] IS [/bold white on green]"
+        elif is_state == "connected":
+            title += "  [bold white on yellow] IS [/bold white on yellow]"
+        return title
+
+    def _cmd_aprs(self, args: list[str]) -> None:
+        sinks = self._find_aprs_sinks()
+        if not sinks:
+            self._set_status("No APRS sinks configured", style="red")
+            return
+        if not args:
+            parts = []
+            for s in sinks:
+                state = "ON" if s.connected else "OFF"
+                parts.append(f"{s}={state}")
+            self._set_status(f"APRS: {', '.join(parts)}", style="cyan")
+            return
+        action = args[0].lower()
+        if action == "on":
+            started = []
+            for s in sinks:
+                if not s.connected:
+                    s.start()
+                    started.append(str(s))
+            if started:
+                self._set_status(f"APRS started: {', '.join(started)}")
+            else:
+                self._set_status("APRS already running", style="yellow")
+        elif action == "off":
+            for s in sinks:
+                s.close()
+            self._set_status(f"APRS stopped ({len(sinks)} sink{'s' if len(sinks) != 1 else ''})")
+        else:
+            self._set_status("Usage: :aprs [on|off]", style="red")
+
+    def _cmd_igate(self, args: list[str]) -> None:
+        """Toggle APRS-IS gateway sink only."""
+        sinks = [p for p in self.peers if type(p).__name__ == "AprsIsSink"]
+        if not sinks:
+            self._set_status("No APRS-IS sink configured", style="red")
+            return
+        if not args:
+            parts = []
+            for s in sinks:
+                state = "ON" if s.connected else "OFF"
+                parts.append(f"{s}={state}")
+            self._set_status(f"iGate: {', '.join(parts)}", style="cyan")
+            return
+        action = args[0].lower()
+        if action == "on":
+            started = []
+            for s in sinks:
+                if not s.connected:
+                    s.start()
+                    started.append(str(s))
+            if started:
+                self._set_status(f"iGate started: {', '.join(started)}")
+            else:
+                self._set_status("iGate already running", style="yellow")
+        elif action == "off":
+            for s in sinks:
+                s.close()
+            self._set_status("iGate stopped")
+        else:
+            self._set_status("Usage: :igate [on|off]", style="red")
+
+    def _cmd_freq(self, args: list[str]) -> None:
+        if self.rig is None:
+            self._set_status("No rig connection", style="red")
+            return
+        if not args:
+            freq = self.rig.get_frequency()
+            if freq:
+                self._set_status(f"Current freq: {float(freq) / 1e6:.6f} MHz", style="cyan")
+            else:
+                self._set_status("No frequency data", style="yellow")
+            return
+        try:
+            val = float(args[0])
+        except ValueError:
+            self._set_status(f"Invalid frequency: {args[0]}", style="red")
+            return
+        # If value looks like MHz (< 1e6), convert to Hz
+        if val < 1e6:
+            freq_hz = int(val * 1e6)
+        else:
+            freq_hz = int(val)
+        if self.rig.set_freq(freq_hz):
+            self._set_status(f"Freq → {freq_hz / 1e6:.6f} MHz")
+        else:
+            self._set_status(f"Failed to set freq {freq_hz} Hz", style="red")
+
     def _set_status(self, msg: str, style: str = "green", duration: float = 3.0) -> None:
         self._status_msg = msg
         self._status_style = style
@@ -401,7 +555,7 @@ class TuiSink(PositionSink):
             bar.append(f" {self._status_msg}", style=f"{self._status_style} on grey23")
             bar.append(" " * 200, style="on grey23")
         else:
-            bar.append(" :help  :info  :log  :q", style="dim on grey23")
+            bar.append(" :aprs  :igate  :help  :info  :log  :q", style="dim on grey23")
             bar.append(" " * 200, style="on grey23")
         return bar
 
@@ -427,7 +581,7 @@ class TuiSink(PositionSink):
 
         parts: list = [alert_panel]
         if self.aprs_buffer is not None:
-            aprs_text = self.aprs_buffer.render(max_lines=6)
+            aprs_text = self.aprs_buffer.render(max_lines=8)
             parts.append(Panel(
                 aprs_text,
                 title="[bold]APRS-IS[/bold]",
@@ -435,10 +589,7 @@ class TuiSink(PositionSink):
                 expand=True,
             ))
         if self.log_buffer is not None:
-            term_h = self._console.size.height
-            aprs_oh = 8 if self.aprs_buffer is not None else 0
-            log_lines = max(3, term_h - 19 - aprs_oh)
-            log_text = self.log_buffer.render(max_lines=log_lines)
+            log_text = self.log_buffer.render(max_lines=5)
             log_panel = Panel(
                 log_text,
                 title="[bold]Log[/bold]",
@@ -447,11 +598,12 @@ class TuiSink(PositionSink):
             )
             parts.append(log_panel)
 
-        outer = self._build_layout(parts, "[bold]rigtop[/bold]", "red")
+        alert_title = self._build_title()
+        outer = self._build_layout(parts, alert_title, "red")
 
         if self._live:
             self._last_parts = parts
-            self._last_title = "[bold]rigtop[/bold]"
+            self._last_title = alert_title
             self._last_border = "red"
             self._live.update(outer, refresh=False)
 
@@ -473,7 +625,7 @@ class TuiSink(PositionSink):
             clients = c.get("clients", [])
 
             # Status dot
-            if status == "open":
+            if status in ("open", "receiving"):
                 txt.append(" ● ", style="bold green")
             elif status == "listening":
                 txt.append(" ● ", style="bold cyan")
@@ -486,7 +638,10 @@ class TuiSink(PositionSink):
             txt.append(f"  {kind}", style="dim")
             txt.append(f"  {status}", style="dim")
 
-            if clients:
+            if isinstance(clients, int):
+                if clients:
+                    txt.append(f"  ({clients} pkts)", style="dim")
+            elif clients:
                 txt.append(f"  ({len(clients)})" if kind == "tcp" else "")
                 for addr in clients:
                     txt.append(f"\n     └ {addr}", style="dim")
@@ -576,9 +731,7 @@ class TuiSink(PositionSink):
         )
 
         # ── Combine side by side ──
-        title = "[bold]rigtop[/bold]"
-        if source_label:
-            title += f"  [dim]{source_label}[/dim]"
+        title = self._build_title(source_label)
 
         # ── Right column: GPS + Connections ──
         conn_panel = self._render_connections()
@@ -592,10 +745,13 @@ class TuiSink(PositionSink):
         # ── APRS pane ──
         aprs_panel = None
         if self.aprs_buffer is not None:
-            aprs_text = self.aprs_buffer.render(max_lines=8)
+            # Show RX count in APRS panel title
+            aprsis = [s for s in self.peers if type(s).__name__ == "AprsIsSink"]
+            rx_info = f"  {aprsis[0].rx_count} pkts" if aprsis and aprsis[0].rx_count else ""
+            aprs_text = self.aprs_buffer.render(max_lines=12)
             aprs_panel = Panel(
                 aprs_text,
-                title="[bold]APRS-IS[/bold]",
+                title=f"[bold]APRS-IS[/bold][dim]{rx_info}[/dim]",
                 border_style="cyan",
                 expand=True,
             )
@@ -605,12 +761,7 @@ class TuiSink(PositionSink):
         if aprs_panel is not None:
             parts.append(aprs_panel)
         if self.log_buffer is not None:
-            # Top row panels ~14 rows, outer border 2, log border 2, cmd bar 1.
-            term_h = self._console.size.height
-            conn_overhead = 0
-            aprs_overhead = 10 if aprs_panel else 0
-            log_lines = max(3, term_h - 19 - conn_overhead - aprs_overhead)
-            log_text = self.log_buffer.render(max_lines=log_lines)
+            log_text = self.log_buffer.render(max_lines=5)
             log_panel = Panel(
                 log_text,
                 title="[bold]Log[/bold]",

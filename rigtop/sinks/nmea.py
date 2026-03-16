@@ -1,11 +1,11 @@
-"""Position sink: NMEA GPS feed for Direwolf (and other NMEA consumers).
+"""Position sink: NMEA GPS feed for Direwolf, PinPoint, and other NMEA consumers.
 
 Supports two modes:
 - **TCP** (default): Listens on a port; clients connect to receive NMEA.
   Works on all platforms.  Linux Direwolf: ``GPSNMEA host=localhost:10110``
 - **Serial**: Writes NMEA to a COM/tty port.  Windows Direwolf requires this.
   Use a virtual serial port pair (com0com) — rigtop writes one end,
-  Direwolf reads the other.  ``GPSNMEA COM11``
+  the consumer reads the other.  ``GPSNMEA COM11``
 """
 
 from __future__ import annotations
@@ -20,8 +20,8 @@ from rigtop.sinks import PositionSink, register_sink
 from rigtop.sources import Position
 
 
-@register_sink("direwolf")
-class DirewolfSink(PositionSink):
+@register_sink("nmea")
+class NmeaSink(PositionSink):
     """NMEA GGA+RMC feed via TCP server or serial port.
 
     If *device* is set (e.g. ``COM10``, ``/dev/ttyUSB0``), NMEA is written
@@ -52,6 +52,12 @@ class DirewolfSink(PositionSink):
     def _is_serial(self) -> bool:
         return bool(self.device)
 
+    @property
+    def connected(self) -> bool:
+        if self._is_serial:
+            return self._serial is not None and self._serial.is_open
+        return self._server is not None
+
     def start(self) -> None:
         if self._is_serial:
             self._start_serial()
@@ -74,9 +80,9 @@ class DirewolfSink(PositionSink):
                 baudrate=self.baudrate,
                 timeout=1,
             )
-            logger.info("Direwolf NMEA sink writing to {} @ {} baud", self.device, self.baudrate)
+            logger.info("NMEA sink writing to {} @ {} baud", self.device, self.baudrate)
         except serial.SerialException as exc:
-            logger.warning("Direwolf sink: cannot open {}: {}", self.device, exc)
+            logger.warning("NMEA sink: cannot open {}: {}", self.device, exc)
             self._serial = None
 
     def _start_tcp(self) -> None:
@@ -85,7 +91,7 @@ class DirewolfSink(PositionSink):
         self._server.settimeout(1.0)
         self._server.bind((self.host, self.port))
         self._server.listen(4)
-        logger.info("Direwolf NMEA sink listening on {}:{}", self.host, self.port)
+        logger.info("NMEA sink listening on {}:{}", self.host, self.port)
         self._accept_thread = threading.Thread(target=self._accept_loop, daemon=True)
         self._accept_thread.start()
 
@@ -96,7 +102,7 @@ class DirewolfSink(PositionSink):
                 conn, addr = self._server.accept()  # type: ignore[union-attr]
                 with self._lock:
                     self._clients.append(conn)
-                logger.info("Direwolf NMEA client connected: {}:{}", addr[0], addr[1])
+                logger.info("NMEA client connected: {}:{}", addr[0], addr[1])
             except socket.timeout:
                 continue
             except OSError:
@@ -134,7 +140,7 @@ class DirewolfSink(PositionSink):
                     sock.close()
                 except OSError:
                     pass
-                logger.info("Direwolf NMEA client disconnected")
+                logger.info("NMEA client disconnected")
 
         n = len(self._clients) - len(dead)
         if n > 0:
@@ -166,14 +172,14 @@ class DirewolfSink(PositionSink):
 
     def __str__(self) -> str:
         if self._is_serial:
-            return f"direwolf@{self.device}"
-        return f"direwolf@{self.host}:{self.port}"
+            return f"nmea@{self.device}"
+        return f"nmea@{self.host}:{self.port}"
 
     def connections(self) -> list[dict]:
         if self._is_serial:
             is_open = self._serial is not None and self._serial.is_open
             return [{
-                "label": f"direwolf  {self.device}",
+                "label": f"nmea  {self.device}",
                 "kind": "serial",
                 "status": "open" if is_open else "closed",
                 "clients": [f"{self.baudrate} baud"] if is_open else [],
@@ -187,7 +193,7 @@ class DirewolfSink(PositionSink):
                 except OSError:
                     pass
         return [{
-            "label": f"direwolf  {self.host}:{self.port}",
+            "label": f"nmea  {self.host}:{self.port}",
             "kind": "tcp",
             "status": "listening" if self._server else "closed",
             "clients": client_addrs,

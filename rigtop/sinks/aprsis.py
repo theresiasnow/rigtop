@@ -49,6 +49,7 @@ class AprsIsSink(PositionSink):
         symbol_table: str = "/",
         symbol_code: str = ">",
         interval: int = 120,
+        aprs_filter: str = "",
     ) -> None:
         self._callsign = callsign
         self._server = server
@@ -58,6 +59,8 @@ class AprsIsSink(PositionSink):
         self._symbol_table = symbol_table
         self._symbol_code = symbol_code
         self._interval = max(interval, 30)  # minimum 30s to be polite
+        self._filter = aprs_filter
+        self._filter_sent = bool(aprs_filter)  # track if a filter has been sent
 
         self._sock: socket.socket | None = None
         self._connected = False
@@ -65,6 +68,8 @@ class AprsIsSink(PositionSink):
         self._receiver_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._last_beacon = 0.0
+        self._last_rx: float = 0.0    # monotonic time of last received packet
+        self._rx_count: int = 0       # total received packets
         self._lock = threading.Lock()
         self.aprs_buffer = None  # set by main.py to share with TUI
 
@@ -74,6 +79,20 @@ class AprsIsSink(PositionSink):
             raise ValueError("aprsis: server required")
         if not self._passcode:
             raise ValueError("aprsis: passcode required")
+
+    @property
+    def connected(self) -> bool:
+        with self._lock:
+            return self._connected
+
+    @property
+    def receiving(self) -> bool:
+        """True if a packet was received within the last 5 minutes."""
+        return (time.monotonic() - self._last_rx) < 300 if self._last_rx else False
+
+    @property
+    def rx_count(self) -> int:
+        return self._rx_count
 
     def start(self) -> None:
         self._connect()
@@ -96,7 +115,10 @@ class AprsIsSink(PositionSink):
             banner = sock.recv(512).decode("ascii", errors="replace").strip()
             logger.info("APRS-IS banner: {}", banner)
             # Send login
-            login = f"user {self._callsign} pass {self._passcode} vers rigtop 1.0\r\n"
+            login = f"user {self._callsign} pass {self._passcode} vers rigtop 1.0"
+            if self._filter:
+                login += f" filter {self._filter}"
+            login += "\r\n"
             sock.sendall(login.encode("ascii"))
             # Read login response
             resp = sock.recv(512).decode("ascii", errors="replace").strip()
@@ -131,6 +153,8 @@ class AprsIsSink(PositionSink):
                     line = line.strip()
                     if not line or line.startswith("#"):
                         continue
+                    self._last_rx = time.monotonic()
+                    self._rx_count += 1
                     if self.aprs_buffer is not None:
                         self.aprs_buffer.push(line)
                     logger.info("APRS-IS: {}", line)
@@ -184,12 +208,28 @@ class AprsIsSink(PositionSink):
             sock.sendall(packet.encode("ascii"))
             self._last_beacon = now
             logger.debug("APRS-IS beacon: {}", packet.strip())
+            # Auto-set range filter from first beacon position if none configured
+            if not self._filter_sent:
+                self._send_filter(f"r/{pos.lat:.1f}/{pos.lon:.1f}/200")
             return f"APRS-IS: beaconed to {self._server}"
         except OSError as e:
             logger.warning("APRS-IS send failed: {}", e)
             with self._lock:
                 self._connected = False
             return None
+
+    def _send_filter(self, filt: str) -> None:
+        """Send a server-side filter command to APRS-IS."""
+        with self._lock:
+            sock = self._sock
+        if sock is None:
+            return
+        try:
+            sock.sendall(f"#filter {filt}\r\n".encode("ascii"))
+            self._filter_sent = True
+            logger.info("APRS-IS filter set: {}", filt)
+        except OSError as e:
+            logger.warning("APRS-IS filter send failed: {}", e)
 
     def close(self) -> None:
         self._stop_event.set()
@@ -209,11 +249,18 @@ class AprsIsSink(PositionSink):
     def connections(self) -> list[dict[str, Any]]:
         with self._lock:
             connected = self._connected
+        age = time.monotonic() - self._last_rx if self._last_rx else -1
+        if connected and self._last_rx and age < 300:
+            status = "receiving"
+        elif connected:
+            status = "open"
+        else:
+            status = "closed"
         return [
             {
                 "label": f"APRS-IS {self._server}:{self._port}",
                 "kind": "tcp",
-                "status": "open" if connected else "closed",
-                "clients": 0,
+                "status": status,
+                "clients": self._rx_count,
             }
         ]

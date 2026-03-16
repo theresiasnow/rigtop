@@ -188,5 +188,15 @@ class RigctldSource(GpsSource):
                 result[lvl] = val
         return result
 
+    def set_mode(self, mode: str, passband: int = 0) -> bool:
+        """Set rig mode (e.g. FM, USB, LSB, CW). Returns True on success."""
+        resp = self._send_command(f"+M {mode} {passband}")
+        return "RPRT 0" in resp
+
+    def set_freq(self, freq_hz: int) -> bool:
+        """Set rig frequency in Hz. Returns True on success."""
+        resp = self._send_command(f"+F {freq_hz}")
+        return "RPRT 0" in resp
+
     def __str__(self) -> str:
         return f"rigctld@{self.host}:{self.port}"

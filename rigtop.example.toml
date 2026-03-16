@@ -36,6 +36,13 @@ ptt_share = false      # true to share PTT port with other apps
 host = "192.168.1.100" # GPS2IP app host address
 port = 11123            # GPS2IP TCP port
 
+# --- APRS ---
+# QSY rig to APRS frequency on startup.
+# Remove this section if you don't use APRS.
+# [aprs]
+# qsy_freq = 144.800   # MHz (EU: 144.800, NA: 144.390)
+# qsy_mode = "FM"
+
 # --- Sinks ---
 # Use [[sink]] (double brackets) for each sink. Multiple sinks run simultaneously.
 # Default sink is TUI if none specified.
@@ -53,11 +60,11 @@ type = "tui"           # full-screen dashboard (default)
 # # port = 2237        # default
 
 # [[sink]]
-# type = "direwolf"    # NMEA GPS sentences for Direwolf
+# type = "nmea"        # NMEA GPS sentences for Direwolf, PinPoint, etc.
 # # TCP mode (Linux):  Direwolf conf: GPSNMEA host=localhost:10110
 # # port = 10110       # default
 # # Serial mode (Windows): set device to a virtual COM port
-# # device = "COM10"   # rigtop writes here, Direwolf reads the other end
+# # device = "COM10"   # rigtop writes here, consumer reads the other end
 
 # [[sink]]
 # type = "gpsd"         # gpsd-compatible JSON GPS server
@@ -71,3 +78,5 @@ type = "tui"           # full-screen dashboard (default)
 # passcode = "12345"   # APRS-IS passcode for your callsign
 # interval = 120         # beacon interval in seconds (min 30)
 # comment = "rigtop"    # APRS comment text
+# aprs_filter = "r/59.2/18.1/200"  # server filter (blank = auto from GPS position)
+# # Filter examples:  r/lat/lon/range(km)  b/CALL1/CALL2  t/poimqstunw

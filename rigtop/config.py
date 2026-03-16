@@ -91,25 +91,32 @@ class GpsConfig(BaseModel):
     port: int = Field(default=11123, ge=1, le=65535)
 
 
+class AprsConfig(BaseModel):
+    """APRS settings — QSY frequency/mode applied on startup."""
+    qsy_freq: float = 0       # QSY rig to this freq (MHz) on start
+    qsy_mode: str = ""         # set rig mode on start (e.g. FM, USB)
+
+
 class SinkConfig(BaseModel):
-    type: Literal["aprsis", "console", "direwolf", "gpsd", "tui", "wsjtx"]
+    type: Literal["aprsis", "console", "nmea", "gpsd", "tui", "wsjtx"]
     enabled: bool = True
     host: str = "127.0.0.1"
     port: int = Field(default=0, ge=0, le=65535)  # 0 = use sink-type default
     nmea: bool = False
-    device: str = ""          # serial port for direwolf sink (e.g. COM10)
-    baudrate: int = 4800       # serial baud rate for direwolf sink
+    device: str = ""          # serial port for nmea sink (e.g. COM10)
+    baudrate: int = 4800       # serial baud rate for nmea sink
     callsign: str = ""        # APRS-IS callsign (aprsis sink)
     server: str = ""           # APRS-IS server host (aprsis sink)
     passcode: str = ""         # APRS-IS passcode (aprsis sink)
     comment: str = "rigtop"   # beacon comment (aprsis sink)
     interval: int = 120        # beacon interval seconds (aprsis sink)
+    aprs_filter: str = ""     # APRS-IS server filter (e.g. r/59.2/18.1/200)
 
     _PORT_DEFAULTS: dict[str, int] = {
         "aprsis": 14580,
         "gpsd": 2947,
         "wsjtx": 2237,
-        "direwolf": 10110,
+        "nmea": 10110,
     }
 
     @model_validator(mode="after")
@@ -132,6 +139,7 @@ class Config(BaseModel):
     rig: RigConfig = Field(default_factory=RigConfig)
     rigctld: RigctldConfig | None = None
     gps_fallback: GpsConfig | None = None
+    aprs: AprsConfig | None = None
     sinks: list[SinkConfig] = Field(default_factory=lambda: [SinkConfig(type="tui")])
 
     @model_validator(mode="after")
@@ -197,6 +205,7 @@ def load_config(path: Path | None) -> Config:
     rigs = _parse_rigs(data)
     rigctld_raw = data.get("rigctld")
     gps_raw = data.get("gps_fallback")
+    aprs_raw = data.get("aprs")
     sinks = _parse_sinks(data)
 
     cfg = Config(
@@ -207,6 +216,7 @@ def load_config(path: Path | None) -> Config:
         rigs=rigs,
         rigctld=RigctldConfig(**rigctld_raw) if rigctld_raw else None,
         gps_fallback=GpsConfig(**gps_raw) if gps_raw else None,
+        aprs=AprsConfig(**aprs_raw) if aprs_raw else None,
         sinks=sinks,
     )
     cfg.select_rig()

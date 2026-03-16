@@ -156,6 +156,26 @@ def main():
         print(f"       {e}")
         sys.exit(1)
 
+    # Give TUI sink a reference to the rig for :mode / :freq commands
+    for sink in sinks:
+        if getattr(sink, "tui", False):
+            sink.rig = rig
+            break
+
+    # --- QSY: if [aprs] section has qsy_freq/qsy_mode, apply to rig ---
+    if cfg.aprs:
+        if cfg.aprs.qsy_freq > 0:
+            freq_hz = int(cfg.aprs.qsy_freq * 1e6)
+            if rig.set_freq(freq_hz):
+                logger.info("QSY → {:.6f} MHz", cfg.aprs.qsy_freq)
+            else:
+                logger.error("Failed to QSY to {:.6f} MHz", cfg.aprs.qsy_freq)
+        if cfg.aprs.qsy_mode:
+            if rig.set_mode(cfg.aprs.qsy_mode):
+                logger.info("Mode → {}", cfg.aprs.qsy_mode)
+            else:
+                logger.error("Failed to set mode {}", cfg.aprs.qsy_mode)
+
     # --- Optional GPS fallback ---
     gps_fallback = None
     if cfg.gps_fallback is not None:
