@@ -200,7 +200,7 @@ def main():
     # --- Run ---
     try:
         run(rig, sinks, interval=cfg.interval, once=cfg.once, meters=cfg.meters,
-            gps_fallback=gps_fallback)
+            gps_fallback=gps_fallback, watchdog=cfg.watchdog)
     finally:
         rig.close()
         if launcher:

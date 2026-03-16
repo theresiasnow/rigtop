@@ -9,6 +9,7 @@ import time
 
 from loguru import logger
 
+from rigtop.config import WatchdogConfig
 from rigtop.geo import maidenhead
 from rigtop.sinks import PositionSink
 from rigtop.sources import GpsSource
@@ -114,6 +115,7 @@ def run(
     once: bool = False,
     meters: bool = False,
     gps_fallback: GpsSource | None = None,
+    watchdog: WatchdogConfig | None = None,
 ) -> None:
     """Main polling loop.
 
@@ -126,6 +128,10 @@ def run(
     stop = threading.Event()
     key_thread = threading.Thread(target=_key_listener, args=(stop, tui_sink), daemon=True)
     key_thread.start()
+
+    # TX watchdog state
+    _tx_start: float | None = None  # monotonic timestamp when TX began
+    _wd_tripped: bool = False       # True after watchdog has fired (until RX resumes)
 
     if not has_tui:
         print(f"Rig:      {rig}")
@@ -162,6 +168,34 @@ def run(
                     "passband": passband,
                     "ptt": rig.get_ptt(),
                 }
+
+                # ── TX watchdog ──
+                ptt = extras["ptt"]
+                if watchdog and ptt is not None:
+                    if ptt:
+                        if _tx_start is None:
+                            _tx_start = time.monotonic()
+                        tx_dur = time.monotonic() - _tx_start
+                        if not _wd_tripped and tx_dur >= watchdog.tx_timeout:
+                            _wd_tripped = True
+                            logger.critical(
+                                "TX WATCHDOG: transmitting for {:.0f}s "
+                                "(limit {}s) — forcing PTT off",
+                                tx_dur, watchdog.tx_timeout,
+                            )
+                            rig.set_ptt(False)
+                            extras["ptt"] = False
+                            extras["wd_tripped"] = True
+                            if tui_sink is not None:
+                                tui_sink.show_watchdog_alert(
+                                    tx_dur, watchdog.tx_timeout,
+                                )
+                    else:
+                        # Back to RX — reset watchdog
+                        if _wd_tripped:
+                            logger.info("TX watchdog reset — radio back to RX")
+                        _tx_start = None
+                        _wd_tripped = False
                 if meters:
                     m = rig.get_meters()
                     # Also grab TX power setting (0-1)

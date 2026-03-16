@@ -198,5 +198,10 @@ class RigctldSource(GpsSource):
         resp = self._send_command(f"+F {freq_hz}")
         return "RPRT 0" in resp
 
+    def set_ptt(self, on: bool) -> bool:
+        """Set PTT state. *on*=True → TX, *on*=False → RX. Returns True on success."""
+        resp = self._send_command(f"+T {1 if on else 0}")
+        return "RPRT 0" in resp
+
     def __str__(self) -> str:
         return f"rigctld@{self.host}:{self.port}"

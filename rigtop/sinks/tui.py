@@ -236,6 +236,8 @@ class TuiSink(PositionSink):
         self._last_border: str = "blue"
         # Snapshot of last-known rig state for :info
         self._last_info: dict[str, str] = {}
+        # TX watchdog state
+        self._wd_tripped: bool = False
 
     def start(self) -> None:
         self._live = Live(
@@ -438,6 +440,8 @@ class TuiSink(PositionSink):
             title += "  [bold white on green] IS [/bold white on green]"
         elif is_state == "connected":
             title += "  [bold white on yellow] IS [/bold white on yellow]"
+        if self._wd_tripped:
+            title += "  [bold white on red blink] WD [/bold white on red blink]"
         return title
 
     def _cmd_aprs(self, args: list[str]) -> None:
@@ -607,6 +611,49 @@ class TuiSink(PositionSink):
             self._last_border = "red"
             self._live.update(outer, refresh=False)
 
+    def show_watchdog_alert(self, tx_duration: float, tx_timeout: int) -> None:
+        """Display a full-screen TX watchdog alert."""
+        self._wd_tripped = True
+        now = datetime.datetime.now().strftime("%H:%M:%S")
+
+        alert = Text()
+        alert.append("\n")
+        alert.append("  ⚠  ", style="bold red blink")
+        alert.append("TX WATCHDOG TRIPPED\n\n", style="bold red")
+        alert.append(
+            f"  Radio was transmitting for {tx_duration:.0f}s "
+            f"(limit {tx_timeout}s)\n",
+            style="bold yellow",
+        )
+        alert.append("  PTT forced OFF — radio returned to RX\n\n", style="bold green")
+        alert.append(f"  {now}", style="dim")
+
+        alert_panel = Panel(
+            alert,
+            title="[bold red]TX WATCHDOG[/bold red]",
+            border_style="red",
+            expand=True,
+        )
+
+        parts: list = [alert_panel]
+        if self.log_buffer is not None:
+            log_text = self.log_buffer.render(max_lines=5)
+            parts.append(Panel(
+                log_text,
+                title="[bold]Log[/bold]",
+                border_style="dim",
+                expand=True,
+            ))
+
+        wd_title = self._build_title()
+        outer = self._build_layout(parts, wd_title, "red")
+
+        if self._live:
+            self._last_parts = parts
+            self._last_title = wd_title
+            self._last_border = "red"
+            self._live.update(outer, refresh=False)
+
     def _render_connections(self) -> Panel | None:
         """Build the Connections panel from peer sinks."""
         if not self.peers:
@@ -665,6 +712,10 @@ class TuiSink(PositionSink):
         source_label: str = kwargs.get("source_label", "")
         gps_src: str = kwargs.get("gps_src", "")
         now = datetime.datetime.now().strftime("%H:%M:%S")
+
+        # Clear watchdog badge once radio is back to RX
+        if ptt is False and self._wd_tripped:
+            self._wd_tripped = False
 
         # Snapshot for :info command
         self._last_info = {

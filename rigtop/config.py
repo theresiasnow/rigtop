@@ -91,6 +91,11 @@ class GpsConfig(BaseModel):
     port: int = Field(default=11123, ge=1, le=65535)
 
 
+class WatchdogConfig(BaseModel):
+    """TX watchdog — force PTT off if transmitting too long."""
+    tx_timeout: int = Field(default=120, ge=10)  # seconds
+
+
 class AprsConfig(BaseModel):
     """APRS settings — QSY frequency/mode applied on startup."""
     qsy_freq: float = 0       # QSY rig to this freq (MHz) on start
@@ -140,6 +145,7 @@ class Config(BaseModel):
     rigctld: RigctldConfig | None = None
     gps_fallback: GpsConfig | None = None
     aprs: AprsConfig | None = None
+    watchdog: WatchdogConfig | None = None
     sinks: list[SinkConfig] = Field(default_factory=lambda: [SinkConfig(type="tui")])
 
     @model_validator(mode="after")
@@ -206,6 +212,7 @@ def load_config(path: Path | None) -> Config:
     rigctld_raw = data.get("rigctld")
     gps_raw = data.get("gps_fallback")
     aprs_raw = data.get("aprs")
+    watchdog_raw = data.get("watchdog")
     sinks = _parse_sinks(data)
 
     cfg = Config(
@@ -217,6 +224,7 @@ def load_config(path: Path | None) -> Config:
         rigctld=RigctldConfig(**rigctld_raw) if rigctld_raw else None,
         gps_fallback=GpsConfig(**gps_raw) if gps_raw else None,
         aprs=AprsConfig(**aprs_raw) if aprs_raw else None,
+        watchdog=WatchdogConfig(**watchdog_raw) if watchdog_raw else None,
         sinks=sinks,
     )
     cfg.select_rig()

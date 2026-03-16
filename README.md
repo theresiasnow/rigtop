@@ -18,6 +18,7 @@ Auto-starts `rigctld`, auto-falls back to GPS2IP when the rig has no GPS fix.
 - **Console** — plain text output mode with optional NMEA sentences
 - **rigctld launcher** — auto-starts rigctld from config (model, serial port, baud, PTT)
 - **TUI commands** — vim-style `:command` interface for rig control, APRS toggling, log filtering
+- **TX watchdog** — forces PTT off if the radio transmits continuously beyond a timeout (protects against stuck TX)
 
 ## Prerequisites
 
@@ -127,6 +128,18 @@ qsy_freq = 144.800   # MHz (EU: 144.800, NA: 144.390)
 qsy_mode = "FM"
 ```
 
+### TX watchdog
+
+Forces PTT off if the radio transmits continuously for longer than `tx_timeout` seconds.
+Protects against stuck TX from VOX loops, stuck PTT buttons, or software bugs.
+The TUI shows a full-screen alert and a blinking **WD** badge when the watchdog trips.
+Remove this section to disable.
+
+```toml
+[watchdog]
+tx_timeout = 120   # seconds (minimum 10, default 120)
+```
+
 ### Sinks
 
 Sinks are output destinations. Use `[[sink]]` (double brackets) for each one.
@@ -233,6 +246,7 @@ Tab completion is supported. Press `Esc` to cancel.
 | **RF** | red | NMEA sink connected (Direwolf/PinPoint receiving GPS) |
 | **IS** | green | APRS-IS connected and receiving traffic |
 | **IS** | yellow | APRS-IS connected but no recent traffic (>5 min) |
+| **WD** | red blink | TX watchdog tripped — PTT was forced off |
 
 ### TUI panels
 
@@ -297,7 +311,8 @@ Common Hamlib models: 3085 = IC-705, 3073 = IC-7300, 3060 = IC-9700.
 ### Sources
 
 - **RigctldSource** — connects to rigctld via TCP. Reads GPS position, frequency,
-  mode, passband, PTT, and meter levels. Also supports `set_freq()` and `set_mode()`.
+  mode, passband, PTT, and meter levels. Also supports `set_freq()`, `set_mode()`,
+  and `set_ptt()` (used by the TX watchdog).
 - **Gps2ipSource** — connects to iOS GPS2IP app via TCP. Parses NMEA GGA/RMC
   sentences for position. Used as fallback when the rig has no GPS fix.
 

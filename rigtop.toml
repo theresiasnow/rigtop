@@ -31,6 +31,9 @@ port = 11123
 qsy_freq = 144.800     # APRS frequency in MHz (EU: 144.800, NA: 144.390)
 qsy_mode = "FM"
 
+[watchdog]
+tx_timeout = 120       # force PTT off after this many seconds of continuous TX
+
 [[sink]]
 type = "tui"
 enabled = true

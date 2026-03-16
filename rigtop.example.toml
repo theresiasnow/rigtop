@@ -43,6 +43,13 @@ port = 11123            # GPS2IP TCP port
 # qsy_freq = 144.800   # MHz (EU: 144.800, NA: 144.390)
 # qsy_mode = "FM"
 
+# --- TX Watchdog ---
+# Force PTT off if the radio transmits continuously for too long.
+# Protects against stuck TX (e.g. VOX loop, stuck PTT button).
+# Remove this section to disable the watchdog.
+[watchdog]
+tx_timeout = 120       # seconds (minimum 10)
+
 # --- Sinks ---
 # Use [[sink]] (double brackets) for each sink. Multiple sinks run simultaneously.
 # Default sink is TUI if none specified.
