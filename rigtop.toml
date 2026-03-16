@@ -38,14 +38,18 @@ port = 2237
 [[sink]]
 type = "direwolf"
 device = "COM10"       # rigtop writes here (VSPD pair COM10↔COM11)
-# baudrate = 4800      # Direwolf conf: GPSNMEA COM11
 
 [[sink]]
 type = "direwolf"
 device = "COM12"       # rigtop writes here (VSPD pair COM12↔COM13)
-# baudrate = 4800      # PinPoint GPS: COM13
 
 [[sink]]
 type = "gpsd"
-host = "127.0.0.1"
-port = 2947
+
+[[sink]]
+type = "aprsis"
+callsign = "SA0TSS-1"
+server = "euro.aprs2.net"
+passcode = "17316"
+interval = 120
+comment = "rigtop"

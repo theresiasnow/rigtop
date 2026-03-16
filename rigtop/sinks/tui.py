@@ -89,6 +89,29 @@ class TuiLogBuffer:
                 txt.append("\n")
         return txt
 
+class AprsBuffer:
+    """Ring buffer of incoming APRS-IS packets for a dedicated TUI pane."""
+
+    def __init__(self, maxlen: int = 200) -> None:
+        self._lines: deque[str] = deque(maxlen=maxlen)
+
+    def push(self, line: str) -> None:
+        ts = datetime.datetime.now().strftime("%H:%M:%S")
+        self._lines.append(f"{ts}  {line}")
+
+    def render(self, max_lines: int = 8) -> Text:
+        tail = list(self._lines)[-max_lines:]
+        txt = Text()
+        if not tail:
+            txt.append(" (no APRS traffic)", style="dim")
+            return txt
+        for i, line in enumerate(tail):
+            txt.append(f" {line}", style="cyan")
+            if i < len(tail) - 1:
+                txt.append("\n")
+        return txt
+
+
 METER_ORDER = [
     "STRENGTH",
     "RFPOWER",
@@ -194,6 +217,7 @@ class TuiSink(PositionSink):
         self._console = Console()
         self._live: Live | None = None
         self.log_buffer: TuiLogBuffer | None = None
+        self.aprs_buffer: AprsBuffer | None = None
         self.peers: list = []  # sibling sinks (set by main.py)
         # Command input state (k9s-style)
         self.command_mode: bool = False
@@ -218,14 +242,13 @@ class TuiSink(PositionSink):
     # ── Command handling ──
 
     def _build_layout(self, content_parts: list, title: str, border_style: str) -> Panel:
-        """Build the outer panel with command bar inserted before the log pane."""
-        # Insert command bar before the last item (log pane) if present,
-        # otherwise append at the end.
+        """Build the outer panel with command bar inserted above APRS/log panes."""
         parts = list(content_parts)
         cmd_bar = self._render_command_bar()
         if self.log_buffer is not None and len(parts) >= 2:
-            # parts = [top_row, log_panel] → insert bar between them
-            parts.insert(-1, cmd_bar)
+            # Insert before APRS+Log when APRS pane is present, else before Log
+            offset = -2 if self.aprs_buffer is not None and len(parts) >= 3 else -1
+            parts.insert(offset, cmd_bar)
         else:
             parts.append(cmd_bar)
         return Panel(
@@ -403,9 +426,18 @@ class TuiSink(PositionSink):
         )
 
         parts: list = [alert_panel]
+        if self.aprs_buffer is not None:
+            aprs_text = self.aprs_buffer.render(max_lines=6)
+            parts.append(Panel(
+                aprs_text,
+                title="[bold]APRS-IS[/bold]",
+                border_style="cyan",
+                expand=True,
+            ))
         if self.log_buffer is not None:
             term_h = self._console.size.height
-            log_lines = max(3, term_h - 19)
+            aprs_oh = 8 if self.aprs_buffer is not None else 0
+            log_lines = max(3, term_h - 19 - aprs_oh)
             log_text = self.log_buffer.render(max_lines=log_lines)
             log_panel = Panel(
                 log_text,
@@ -548,20 +580,36 @@ class TuiSink(PositionSink):
         if source_label:
             title += f"  [dim]{source_label}[/dim]"
 
-        top_row = Columns([right_panel, left_panel], equal=True, expand=True)
-
-        # ── Middle pane: Connections ──
+        # ── Right column: GPS + Connections ──
         conn_panel = self._render_connections()
+        right_col_parts = [left_panel]
+        if conn_panel is not None:
+            right_col_parts.append(conn_panel)
+        right_col = Group(*right_col_parts)
+
+        top_row = Columns([right_panel, right_col], equal=True, expand=True)
+
+        # ── APRS pane ──
+        aprs_panel = None
+        if self.aprs_buffer is not None:
+            aprs_text = self.aprs_buffer.render(max_lines=8)
+            aprs_panel = Panel(
+                aprs_text,
+                title="[bold]APRS-IS[/bold]",
+                border_style="cyan",
+                expand=True,
+            )
 
         # ── Bottom pane: Log messages (fills remaining terminal height) ──
         parts: list = [top_row]
-        if conn_panel is not None:
-            parts.append(conn_panel)
+        if aprs_panel is not None:
+            parts.append(aprs_panel)
         if self.log_buffer is not None:
             # Top row panels ~14 rows, outer border 2, log border 2, cmd bar 1.
             term_h = self._console.size.height
-            conn_overhead = 4 + len(self.peers) * 2 if conn_panel else 0
-            log_lines = max(3, term_h - 19 - conn_overhead)
+            conn_overhead = 0
+            aprs_overhead = 10 if aprs_panel else 0
+            log_lines = max(3, term_h - 19 - conn_overhead - aprs_overhead)
             log_text = self.log_buffer.render(max_lines=log_lines)
             log_panel = Panel(
                 log_text,

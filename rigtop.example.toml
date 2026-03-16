@@ -39,6 +39,7 @@ port = 11123            # GPS2IP TCP port
 # --- Sinks ---
 # Use [[sink]] (double brackets) for each sink. Multiple sinks run simultaneously.
 # Default sink is TUI if none specified.
+# Set enabled = false to disable a sink without removing it.
 
 [[sink]]
 type = "tui"           # full-screen dashboard (default)
@@ -49,22 +50,24 @@ type = "tui"           # full-screen dashboard (default)
 
 # [[sink]]
 # type = "wsjtx"       # send grid locator to WSJT-X via UDP
-# host = "127.0.0.1"
-# port = 2237
+# # port = 2237        # default
 
 # [[sink]]
 # type = "direwolf"    # NMEA GPS sentences for Direwolf
 # # TCP mode (Linux):  Direwolf conf: GPSNMEA host=localhost:10110
-# host = "127.0.0.1"
-# port = 10110
-# # Serial mode (Windows): set device to a virtual COM port (com0com)
-# # rigtop writes to COM10, Direwolf reads COM11: GPSNMEA COM11
-# # device = "COM10"
-# # baudrate = 4800
+# # port = 10110       # default
+# # Serial mode (Windows): set device to a virtual COM port
+# # device = "COM10"   # rigtop writes here, Direwolf reads the other end
 
 # [[sink]]
 # type = "gpsd"         # gpsd-compatible JSON GPS server
-# host = "127.0.0.1"   # listen address
-# port = 2947           # listen port (gpsd default)
+# # port = 2947         # default
 # # Works with: gpspipe, cgps, Xastir, YAAC, any libgps client
-# # In direwolf.conf:  GPSD localhost:2947
+
+# [[sink]]
+# type = "aprsis"       # beacon live GPS to APRS-IS (aprs.fi etc.)
+# callsign = "N0CALL-1" # your callsign-SSID
+# server = "euro.aprs2.net"  # APRS-IS Tier 2 server
+# passcode = "12345"   # APRS-IS passcode for your callsign
+# interval = 120         # beacon interval in seconds (min 30)
+# comment = "rigtop"    # APRS comment text

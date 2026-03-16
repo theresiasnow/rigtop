@@ -78,6 +78,7 @@ def create_sink(config: dict[str, Any]) -> PositionSink:
 
 
 # Import concrete sinks to trigger registration
+import rigtop.sinks.aprsis as _aprsis  # noqa: F401, E402
 import rigtop.sinks.console as _console  # noqa: F401, E402
 import rigtop.sinks.direwolf as _direwolf  # noqa: F401, E402
 import rigtop.sinks.gpsd as _gpsd  # noqa: F401, E402

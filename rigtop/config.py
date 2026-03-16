@@ -92,12 +92,31 @@ class GpsConfig(BaseModel):
 
 
 class SinkConfig(BaseModel):
-    type: Literal["console", "direwolf", "gpsd", "tui", "wsjtx"]
+    type: Literal["aprsis", "console", "direwolf", "gpsd", "tui", "wsjtx"]
+    enabled: bool = True
     host: str = "127.0.0.1"
-    port: int = Field(default=2237, ge=1, le=65535)
+    port: int = Field(default=0, ge=0, le=65535)  # 0 = use sink-type default
     nmea: bool = False
     device: str = ""          # serial port for direwolf sink (e.g. COM10)
     baudrate: int = 4800       # serial baud rate for direwolf sink
+    callsign: str = ""        # APRS-IS callsign (aprsis sink)
+    server: str = ""           # APRS-IS server host (aprsis sink)
+    passcode: str = ""         # APRS-IS passcode (aprsis sink)
+    comment: str = "rigtop"   # beacon comment (aprsis sink)
+    interval: int = 120        # beacon interval seconds (aprsis sink)
+
+    _PORT_DEFAULTS: dict[str, int] = {
+        "aprsis": 14580,
+        "gpsd": 2947,
+        "wsjtx": 2237,
+        "direwolf": 10110,
+    }
+
+    @model_validator(mode="after")
+    def _apply_default_port(self) -> SinkConfig:
+        if self.port == 0:
+            self.port = self._PORT_DEFAULTS.get(self.type, 0)
+        return self
 
 
 class Config(BaseModel):
@@ -151,11 +170,11 @@ def _parse_rigs(data: dict) -> list[RigConfig]:
 
 
 def _parse_sinks(data: dict) -> list[SinkConfig]:
-    """Parse sink entries."""
+    """Parse sink entries, skipping disabled ones."""
     raw = data.get("sink", [{"type": "tui"}])
     if isinstance(raw, dict):
         raw = [raw]
-    return [SinkConfig(**s) for s in raw]
+    return [s for s in (SinkConfig(**entry) for entry in raw) if s.enabled]
 
 
 def load_config(path: Path | None) -> Config:
