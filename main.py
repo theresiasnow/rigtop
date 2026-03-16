@@ -14,13 +14,14 @@ from pathlib import Path
 
 from loguru import logger
 
+from rigtop.app import run
 from rigtop.config import load_config
 from rigtop.rigctld_launcher import RigctldLauncher
-from rigtop.sources.rigctld import RigctldSource
-from rigtop.sources.gps2ip import Gps2ipSource
 from rigtop.sinks import create_sink
-from rigtop.sinks.tui import AprsBuffer, TuiLogBuffer
-from rigtop.app import run
+from rigtop.sinks.tui import AprsBuffer
+from rigtop.sources.direwolf import DirewolfClient
+from rigtop.sources.gps2ip import Gps2ipSource
+from rigtop.sources.rigctld import RigctldSource
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -97,7 +98,6 @@ def main():
     # --- Create sinks early so the TUI log buffer exists before rigctld starts ---
     sinks = [create_sink(s.model_dump(exclude_defaults=False)) for s in cfg.sinks]
 
-    tui_log_buf: TuiLogBuffer | None = None
     aprs_buf: AprsBuffer | None = None
 
     # Shared APRS buffer: connect APRS-IS sink → TUI pane
@@ -107,13 +107,21 @@ def main():
             sink.aprs_buffer = aprs_buf
             break
 
+    # --- Direwolf KISS client (optional) ---
+    dw_client: DirewolfClient | None = None
+    if cfg.direwolf is not None:
+        if aprs_buf is None:
+            aprs_buf = AprsBuffer()
+        dw_client = DirewolfClient(host=cfg.direwolf.host, port=cfg.direwolf.port)
+        dw_client.aprs_buffer = aprs_buf
+
     for sink in sinks:
         if getattr(sink, "tui", False):
-            tui_log_buf = TuiLogBuffer()
-            tui_log_buf.min_level = cfg.log_level.value
-            sink.log_buffer = tui_log_buf
             sink.aprs_buffer = aprs_buf
-            sink.peers = [s for s in sinks if s is not sink]
+            peers = [s for s in sinks if s is not sink]
+            if dw_client is not None:
+                peers.append(dw_client)
+            sink.peers = peers
             break
 
     # --- Auto-start rigctld if configured ---
@@ -136,7 +144,7 @@ def main():
             listen_host=cfg.rig.host,
             listen_port=cfg.rig.port,
             log_level=cfg.log_level.value,
-            stderr_callback=tui_log_buf.push_line if tui_log_buf else None,
+            stderr_callback=None,
         )
         try:
             launcher.start()
@@ -160,6 +168,7 @@ def main():
     for sink in sinks:
         if getattr(sink, "tui", False):
             sink.rig = rig
+            sink.rig_name = cfg.rig.name
             break
 
     # --- QSY: if [aprs] section has qsy_freq/qsy_mode, apply to rig ---
@@ -191,6 +200,8 @@ def main():
             gps_fallback = None
 
     # --- Start sinks ---
+    if dw_client is not None:
+        dw_client.start()
     for sink in sinks:
         try:
             sink.start()
@@ -203,6 +214,8 @@ def main():
             gps_fallback=gps_fallback, watchdog=cfg.watchdog)
     finally:
         rig.close()
+        if dw_client:
+            dw_client.close()
         if launcher:
             launcher.stop()
         if gps_fallback:

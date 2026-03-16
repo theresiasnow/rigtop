@@ -63,7 +63,7 @@ class RigctldSource(GpsSource):
                 response += chunk
                 if response.endswith(b"\n"):
                     break
-            except socket.timeout:
+            except TimeoutError:
                 logger.debug("RX: (timeout)")
                 break
         decoded = response.decode().strip()
@@ -75,6 +75,7 @@ class RigctldSource(GpsSource):
         lines = resp.splitlines()
         lat = None
         lon = None
+        alt = None
         for line in lines:
             line = line.strip()
             if line.startswith("Latitude:"):
@@ -87,6 +88,11 @@ class RigctldSource(GpsSource):
                     lon = float(line.split(":", 1)[1].strip())
                 except ValueError:
                     pass
+            elif line.startswith("Altitude:"):
+                try:
+                    alt = float(line.split(":", 1)[1].strip())
+                except ValueError:
+                    pass
         # Fallback: simple two-line response (lat\nlon)
         if lat is None and lon is None and len(lines) >= 2:
             try:
@@ -95,7 +101,7 @@ class RigctldSource(GpsSource):
             except ValueError:
                 return None
         if lat is not None and lon is not None:
-            return Position(lat, lon)
+            return Position(lat, lon, alt=alt)
         return None
 
     def get_frequency(self) -> str | None:

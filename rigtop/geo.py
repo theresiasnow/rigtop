@@ -61,7 +61,7 @@ def decimal_to_nmea_lon(lon: float) -> tuple[str, str]:
 
 def build_gga_sentence(lat: float, lon: float) -> str:
     """Build a GPGGA NMEA sentence from position data."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     time_str = now.strftime("%H%M%S.00")
     lat_str, lat_dir = decimal_to_nmea_lat(lat)
     lon_str, lon_dir = decimal_to_nmea_lon(lon)
@@ -71,7 +71,7 @@ def build_gga_sentence(lat: float, lon: float) -> str:
 
 def build_rmc_sentence(lat: float, lon: float) -> str:
     """Build a GPRMC NMEA sentence from position data."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     time_str = now.strftime("%H%M%S.00")
     date_str = now.strftime("%d%m%y")
     lat_str, lat_dir = decimal_to_nmea_lat(lat)

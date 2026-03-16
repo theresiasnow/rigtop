@@ -16,5 +16,26 @@ dependencies = [
     "rich>=13.0",
 ]
 
+[dependency-groups]
+dev = [
+    "ruff>=0.15.6",
+]
+
 [project.scripts]
 rigtop = "main:main"
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+    "RUF001",  # ambiguous unicode chars (intentional en dashes in help text)
+    "SIM102",  # nested if → combined if (less readable)
+    "SIM105",  # contextlib.suppress (explicit try/except is clearer)
+    "SIM108",  # ternary operator (readability preference)
+    "SIM114",  # combine if branches (different conditions)
+]
+
+

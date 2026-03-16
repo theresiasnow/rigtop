@@ -103,7 +103,7 @@ class NmeaSink(PositionSink):
                 with self._lock:
                     self._clients.append(conn)
                 logger.info("NMEA client connected: {}:{}", addr[0], addr[1])
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except OSError:
                 break

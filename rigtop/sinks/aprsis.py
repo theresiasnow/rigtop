@@ -158,7 +158,7 @@ class AprsIsSink(PositionSink):
                     if self.aprs_buffer is not None:
                         self.aprs_buffer.push(line)
                     logger.info("APRS-IS: {}", line)
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except OSError:
                 if not self._stop_event.is_set():

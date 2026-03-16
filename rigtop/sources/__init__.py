@@ -13,6 +13,7 @@ class Position:
 
     lat: float
     lon: float
+    alt: float | None = None
 
 
 class GpsSource(ABC):

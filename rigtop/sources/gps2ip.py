@@ -43,7 +43,7 @@ class Gps2ipSource(GpsSource):
             if not data:
                 raise ConnectionError("GPS2IP connection closed")
             self._buffer += data.decode("ascii", errors="ignore")
-        except socket.timeout:
+        except TimeoutError:
             pass
 
         sentences = []
@@ -64,7 +64,13 @@ class Gps2ipSource(GpsSource):
 
             if isinstance(msg, (pynmea2.types.talker.GGA, pynmea2.types.talker.RMC)):
                 if msg.latitude and msg.longitude:
-                    return Position(msg.latitude, msg.longitude)
+                    alt = None
+                    if hasattr(msg, "altitude") and msg.altitude:
+                        try:
+                            alt = float(msg.altitude)
+                        except (ValueError, TypeError):
+                            pass
+                    return Position(msg.latitude, msg.longitude, alt=alt)
         return None
 
     def __str__(self) -> str:

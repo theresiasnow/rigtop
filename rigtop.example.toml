@@ -9,7 +9,7 @@ log_level = "WARNING" # DEBUG, INFO, WARNING, ERROR (also controls rigctld -v)
 
 # --- Rig (rigctld) — always used for GPS, frequency, mode, meters ---
 [rig]
-name = "default"      # rig name (for multi-rig configs use [[rig]])
+name = "IC-705"       # radio name (shown in TUI Station pane)
 host = "127.0.0.1"    # rigctld TCP host
 port = 4532            # rigctld TCP port
 
@@ -49,6 +49,14 @@ port = 11123            # GPS2IP TCP port
 # Remove this section to disable the watchdog.
 [watchdog]
 tx_timeout = 120       # seconds (minimum 10)
+
+# --- Direwolf KISS TCP ---
+# Receive local RF APRS decodes from Direwolf.
+# Decoded packets appear in the APRS pane in yellow.
+# Remove this section if you don't run Direwolf.
+# [direwolf]
+# host = "127.0.0.1"
+# port = 8001           # Direwolf KISS TCP port
 
 # --- Sinks ---
 # Use [[sink]] (double brackets) for each sink. Multiple sinks run simultaneously.

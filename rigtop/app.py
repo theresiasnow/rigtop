@@ -63,8 +63,8 @@ def _key_listener(stop: threading.Event, tui_sink=None) -> None:
             else:
                 time.sleep(0.1)
     else:
-        import tty
         import termios
+        import tty
         fd = sys.stdin.fileno()
         old = termios.tcgetattr(fd)
         try:
@@ -206,7 +206,10 @@ def run(
 
                 # Print summary (non-TUI only)
                 if not has_tui:
-                    print(f"[{now_str}] {pos.lat:.6f}, {pos.lon:.6f}  Grid: {grid}  (GPS: {gps_src})")
+                    print(
+                        f"[{now_str}] {pos.lat:.6f}, {pos.lon:.6f}"
+                        f"  Grid: {grid}  (GPS: {gps_src})"
+                    )
                     freq = extras.get("freq")
                     mode = extras.get("mode")
                     if freq or mode:

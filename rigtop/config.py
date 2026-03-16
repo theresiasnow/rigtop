@@ -2,23 +2,15 @@
 
 from __future__ import annotations
 
-import sys
-from enum import Enum
+import tomllib
+from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    try:
-        import tomllib  # type: ignore[import-not-found]
-    except ImportError:
-        import tomli as tomllib  # type: ignore[import-not-found, no-redef]
 
-
-class LogLevel(str, Enum):
+class LogLevel(StrEnum):
     DEBUG = "DEBUG"
     INFO = "INFO"
     WARNING = "WARNING"
@@ -31,7 +23,7 @@ class RigConfig(BaseModel):
     port: int = Field(default=4532, ge=1, le=65535)
 
 
-class Parity(str, Enum):
+class Parity(StrEnum):
     NONE = "None"
     ODD = "Odd"
     EVEN = "Even"
@@ -39,19 +31,19 @@ class Parity(str, Enum):
     SPACE = "Space"
 
 
-class Handshake(str, Enum):
+class Handshake(StrEnum):
     NONE = "None"
     XONXOFF = "XONXOFF"
     HARDWARE = "Hardware"
 
 
-class DtrRtsState(str, Enum):
+class DtrRtsState(StrEnum):
     UNSET = "Unset"
     ON = "ON"
     OFF = "OFF"
 
 
-class PttType(str, Enum):
+class PttType(StrEnum):
     RIG = "RIG"
     RIGMICDATA = "RIGMICDATA"
     DTR = "DTR"
@@ -94,6 +86,12 @@ class GpsConfig(BaseModel):
 class WatchdogConfig(BaseModel):
     """TX watchdog — force PTT off if transmitting too long."""
     tx_timeout: int = Field(default=120, ge=10)  # seconds
+
+
+class DirewolfConfig(BaseModel):
+    """Direwolf KISS TCP — receive local RF APRS decodes."""
+    host: str = "127.0.0.1"
+    port: int = Field(default=8001, ge=1, le=65535)
 
 
 class AprsConfig(BaseModel):
@@ -145,6 +143,7 @@ class Config(BaseModel):
     rigctld: RigctldConfig | None = None
     gps_fallback: GpsConfig | None = None
     aprs: AprsConfig | None = None
+    direwolf: DirewolfConfig | None = None
     watchdog: WatchdogConfig | None = None
     sinks: list[SinkConfig] = Field(default_factory=lambda: [SinkConfig(type="tui")])
 
@@ -212,6 +211,7 @@ def load_config(path: Path | None) -> Config:
     rigctld_raw = data.get("rigctld")
     gps_raw = data.get("gps_fallback")
     aprs_raw = data.get("aprs")
+    direwolf_raw = data.get("direwolf")
     watchdog_raw = data.get("watchdog")
     sinks = _parse_sinks(data)
 
@@ -224,6 +224,7 @@ def load_config(path: Path | None) -> Config:
         rigctld=RigctldConfig(**rigctld_raw) if rigctld_raw else None,
         gps_fallback=GpsConfig(**gps_raw) if gps_raw else None,
         aprs=AprsConfig(**aprs_raw) if aprs_raw else None,
+        direwolf=DirewolfConfig(**direwolf_raw) if direwolf_raw else None,
         watchdog=WatchdogConfig(**watchdog_raw) if watchdog_raw else None,
         sinks=sinks,
     )

@@ -8,10 +8,11 @@ Auto-starts `rigctld`, auto-falls back to GPS2IP when the rig has no GPS fix.
 
 ## Features
 
-- **TUI dashboard** — full-screen rich terminal UI with GPS, rig meters, APRS traffic, log pane, and connection status
+- **TUI dashboard** — full-screen rich terminal UI with GPS, rig meters, APRS traffic, and connection status
 - **Rig control** — frequency, mode, passband, PTT, and meter readings (ALC, SWR, S-meter, power, etc.) via rigctld
 - **GPS** — position from rig via rigctld, with iOS GPS2IP fallback
 - **APRS-IS** — beacon live GPS to APRS-IS (aprs.fi), receive nearby traffic with server-side filter
+- **Direwolf RF** — receive local APRS RF decodes from Direwolf via KISS TCP
 - **NMEA output** — feed GGA+RMC sentences to Direwolf, PinPoint, or any NMEA consumer via serial or TCP
 - **gpsd server** — gpsd-compatible JSON server (protocol 3.x) for Xastir, YAAC, cgps, gpspipe, etc.
 - **WSJT-X** — sends Maidenhead grid locator via UDP
@@ -128,6 +129,17 @@ qsy_freq = 144.800   # MHz (EU: 144.800, NA: 144.390)
 qsy_mode = "FM"
 ```
 
+### Direwolf KISS TCP
+
+Receive local RF APRS decodes from Direwolf. Packets decoded by your radio appear
+in the APRS pane in yellow. Optional — remove this section if you don’t run Direwolf.
+
+```toml
+[direwolf]
+host = "127.0.0.1"
+port = 8001           # Direwolf KISS TCP port
+```
+
 ### TX watchdog
 
 Forces PTT off if the radio transmits continuously for longer than `tx_timeout` seconds.
@@ -231,9 +243,7 @@ The TUI uses a vim-style command interface. Press `:` to enter command mode.
 | `:mode` | `[MODE [passband]]` | Show or set rig mode (FM, USB, LSB, CW, AM, …) |
 | `:aprs` | `[on\|off]` | Show status or toggle all APRS sinks (NMEA + APRS-IS) |
 | `:igate` | `[on\|off]` | Show status or toggle APRS-IS gateway only |
-| `:log` | `[LEVEL]` | Show or set log filter level (DEBUG, INFO, WARNING, …) |
 | `:info` | | Show rig connection info, frequency, mode, grid |
-| `:clear` | | Clear log buffer |
 | `:help` | | Show command list |
 | `:q` / `:quit` | | Exit rigtop |
 
@@ -253,7 +263,7 @@ Tab completion is supported. Press `Esc` to cancel.
 - **Rig / Meters** — frequency, mode, PTT indicator, meter bars (S-meter, ALC, SWR, power, etc.) with colour-coded warnings
 - **GPS** — position in degrees/minutes, decimal, Maidenhead grid, GPS source
 - **Connections** — status of all sinks (serial, TCP, UDP) with client counts
-- **APRS-IS** — incoming APRS traffic feed with packet count
+- **APRS** — incoming APRS traffic feed (yellow = local RF via Direwolf, green = RF-gated via APRS-IS, cyan = internet-only) with packet counts
 - **Log** — filtered log output from rigtop and rigctld stderr
 - **Command bar** — hint bar showing available commands, status messages
 
@@ -272,7 +282,7 @@ Tab completion is supported. Press `Esc` to cancel.
 ## rigctld
 
 rigtop auto-starts `rigctld` when `[rigctld]` is in the config. Rigctld stderr
-is captured and displayed in the TUI log pane.
+is logged to `rigtop.log`.
 
 To run rigctld manually instead, use `--no-rigctld`:
 
@@ -289,12 +299,12 @@ Common Hamlib models: 3085 = IC-705, 3073 = IC-7300, 3060 = IC-9700.
 ## Architecture
 
 ```
-┌──────────────┐     ┌──────────────┐
-│   rigctld    │◄────│  rigtop      │
-│  (Hamlib)    │     │  main loop   │
-└──────┬───────┘     └──────┬───────┘
-       │                    │
-  GPS, freq, mode,     polls every N sec
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│   rigctld    │◄────│  rigtop      │────►│  Direwolf    │
+│  (Hamlib)    │     │  main loop   │     │  KISS TCP    │
+└──────┬───────┘     └──────┬───────┘     └──────────────┘
+       │                    │               RF decodes ▲
+  GPS, freq, mode,     polls every N sec               │
   meters, PTT              │
        │              ┌─────┴──────────────────────┐
        ▼              │         Sinks               │
@@ -315,6 +325,8 @@ Common Hamlib models: 3085 = IC-705, 3073 = IC-7300, 3060 = IC-9700.
   and `set_ptt()` (used by the TX watchdog).
 - **Gps2ipSource** — connects to iOS GPS2IP app via TCP. Parses NMEA GGA/RMC
   sentences for position. Used as fallback when the rig has no GPS fix.
+- **DirewolfClient** — connects to Direwolf KISS TCP port. Decodes AX.25 UI frames
+  to TNC2 text and feeds them into the shared APRS buffer (shown in yellow in the TUI).
 
 ### Sink plugin system
 
@@ -379,7 +391,6 @@ The rig must be on 144.800 MHz FM (not data mode) for standard 1200 baud APRS.
 ## Logging
 
 Logs are written to `rigtop.log` in the current directory (5 MB rotation, 3 files retained).
-The TUI log pane shows a filtered view. Use `:log DEBUG` to see everything.
 
 ## Project structure
 
@@ -394,6 +405,7 @@ rigtop/
     __init__.py            Position dataclass, GpsSource ABC, registry
     rigctld.py             RigctldSource — rig GPS, freq, mode, meters, PTT
     gps2ip.py              Gps2ipSource — iOS GPS2IP NMEA stream
+    direwolf.py            DirewolfClient — KISS TCP client for RF decodes
   sinks/
     __init__.py            PositionSink ABC, registry, create_sink factory
     tui.py                 TuiSink — rich full-screen dashboard

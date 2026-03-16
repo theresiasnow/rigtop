@@ -5,10 +5,10 @@ from __future__ import annotations
 import datetime
 import time as _time
 from collections import deque
+from typing import ClassVar
 
-from loguru import logger
-from rich.console import Console, Group
 from rich.columns import Columns
+from rich.console import Console, Group
 from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
@@ -18,82 +18,11 @@ from rigtop.sinks import PositionSink, register_sink
 from rigtop.sources import Position
 
 
-# ── Loguru sink that buffers records for the TUI ──
-
-_LOG_STYLES = {
-    "TRACE": "dim",
-    "DEBUG": "dim cyan",
-    "INFO": "green",
-    "SUCCESS": "bold green",
-    "WARNING": "yellow",
-    "ERROR": "bold red",
-    "CRITICAL": "bold white on red",
-}
-
-
-# Numeric ordering for level filtering
-_LEVEL_ORDER = {
-    "TRACE": 0,
-    "DEBUG": 1,
-    "INFO": 2,
-    "SUCCESS": 3,
-    "WARNING": 4,
-    "ERROR": 5,
-    "CRITICAL": 6,
-}
-
-
-class TuiLogBuffer:
-    """Ring buffer of ``(level, line)`` tuples for the TUI log pane.
-
-    Accepts both loguru ``message`` objects (via :meth:`write`) and raw
-    text lines (via :meth:`push_line`).
-    """
-
-    def __init__(self, maxlen: int = 500) -> None:
-        self._records: deque[tuple[str, str]] = deque(maxlen=maxlen)
-        self.min_level: str = "DEBUG"  # render-time filter
-
-    # -- loguru sink interface --
-    def write(self, message) -> None:
-        record = message.record
-        level = record["level"].name
-        ts = record["time"].strftime("%H:%M:%S")
-        mod = record["name"] or ""
-        text = record["message"]
-        self._records.append((level, f"{ts}  {level:<8} {mod} — {text}"))
-
-    # -- raw text (e.g. rigctld stderr) --
-    def push_line(self, line: str, level: str = "DEBUG") -> None:
-        """Append a plain-text line tagged with *level*."""
-        ts = datetime.datetime.now().strftime("%H:%M:%S")
-        self._records.append((level, f"{ts}  {line}"))
-
-    def render(self, max_lines: int = 12) -> Text:
-        """Return a rich Text with the most recent log lines, coloured by level."""
-        threshold = _LEVEL_ORDER.get(self.min_level, 0)
-        visible = [
-            (lvl, line)
-            for lvl, line in self._records
-            if _LEVEL_ORDER.get(lvl, 0) >= threshold
-        ]
-        tail = visible[-max_lines:]
-        txt = Text()
-        if not tail:
-            txt.append(" (no log messages)", style="dim")
-            return txt
-        for i, (level, line) in enumerate(tail):
-            style = _LOG_STYLES.get(level, "")
-            txt.append(f" {line}", style=style)
-            if i < len(tail) - 1:
-                txt.append("\n")
-        return txt
-
 class AprsBuffer:
     """Ring buffer of incoming APRS-IS packets for a dedicated TUI pane."""
 
     #: Path tokens that indicate the packet was heard on RF and gated
-    _RF_TOKENS = {"qAR", "qAr", "qAo", "qAO"}
+    _RF_TOKENS: ClassVar[set[str]] = {"qAR", "qAr", "qAo", "qAO"}
 
     def __init__(self, maxlen: int = 200) -> None:
         self._lines: deque[tuple[str, str]] = deque(maxlen=maxlen)  # (source, formatted)
@@ -110,10 +39,10 @@ class AprsBuffer:
                 return "rf"
         return "is"
 
-    def push(self, line: str) -> None:
+    def push(self, line: str, source: str | None = None) -> None:
         ts = datetime.datetime.now().strftime("%H:%M:%S")
-        source = self._classify(line)
-        self._lines.append((source, f"{ts}  {line}"))
+        src = source if source else self._classify(line)
+        self._lines.append((src, f"{ts}  {line}"))
 
     def render(self, max_lines: int = 8) -> Text:
         tail = list(self._lines)[-max_lines:]
@@ -122,7 +51,12 @@ class AprsBuffer:
             txt.append(" (no APRS traffic)", style="dim")
             return txt
         for i, (source, line) in enumerate(tail):
-            style = "green" if source == "rf" else "cyan"
+            if source == "rf-local":
+                style = "yellow"
+            elif source == "rf":
+                style = "green"
+            else:
+                style = "cyan"
             txt.append(f" {line}", style=style)
             if i < len(tail) - 1:
                 txt.append("\n")
@@ -205,9 +139,7 @@ def _meter_bar(name: str, value: float, width: int = 20) -> Text:
     line.append(f"  {val_str}")
 
     # Warning tags for dangerous values
-    if name == "SWR" and value >= 3.0:
-        line.append("  ⚠ HIGH", style="bold red blink")
-    elif name == "ALC" and value >= 0.8:
+    if (name == "SWR" and value >= 3.0) or (name == "ALC" and value >= 0.8):
         line.append("  ⚠ HIGH", style="bold red blink")
 
     return line
@@ -221,14 +153,12 @@ class TuiSink(PositionSink):
     tui = True
 
     # Known commands and their arguments for tab completion
-    _COMMANDS: dict[str, list[str]] = {
+    _COMMANDS: ClassVar[dict[str, list[str]]] = {
         "aprs": ["on", "off"],
-        "clear": [],
         "freq": [],
         "help": [],
         "igate": ["on", "off"],
         "info": [],
-        "log": ["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"],
         "mode": ["USB", "LSB", "FM", "AM", "CW", "CWR", "RTTY", "RTTYR",
                  "PKTUSB", "PKTLSB", "PKTFM"],
         "q": [],
@@ -238,10 +168,11 @@ class TuiSink(PositionSink):
     def __init__(self) -> None:
         self._console = Console()
         self._live: Live | None = None
-        self.log_buffer: TuiLogBuffer | None = None
         self.aprs_buffer: AprsBuffer | None = None
         self.peers: list = []  # sibling sinks (set by main.py)
         self.rig = None  # RigctldSource reference (set by main.py)
+        self.rig_name: str = ""  # radio name from config (set by main.py)
+        self._start_time: float = _time.monotonic()
         # Command input state (k9s-style)
         self.command_mode: bool = False
         self.command_buf: str = ""
@@ -267,13 +198,11 @@ class TuiSink(PositionSink):
     # ── Command handling ──
 
     def _build_layout(self, content_parts: list, title: str, border_style: str) -> Panel:
-        """Build the outer panel with command bar inserted above APRS/log panes."""
+        """Build the outer panel with command bar inserted above APRS pane."""
         parts = list(content_parts)
         cmd_bar = self._render_command_bar()
-        if self.log_buffer is not None and len(parts) >= 2:
-            # Insert before APRS+Log when APRS pane is present, else before Log
-            offset = -2 if self.aprs_buffer is not None and len(parts) >= 3 else -1
-            parts.insert(offset, cmd_bar)
+        if self.aprs_buffer is not None and len(parts) >= 2:
+            parts.insert(-1, cmd_bar)
         else:
             parts.append(cmd_bar)
         return Panel(
@@ -327,8 +256,6 @@ class TuiSink(PositionSink):
         candidates = self._COMMANDS.get(cmd, [])
         return [a for a in candidates if a.startswith(arg_prefix)]
 
-    _VALID_LEVELS = {"TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"}
-
     def execute_command(self, raw: str) -> None:
         """Parse and execute a colon-command (e.g. ':log DEBUG')."""
         parts = raw.strip().split()
@@ -339,14 +266,10 @@ class TuiSink(PositionSink):
             self._cmd_aprs(args)
         elif cmd == "igate":
             self._cmd_igate(args)
-        elif cmd == "log":
-            self._cmd_log(args)
         elif cmd == "help":
             self._cmd_help()
         elif cmd == "info":
             self._cmd_info()
-        elif cmd == "clear":
-            self._cmd_clear()
         elif cmd == "mode":
             self._cmd_mode(args)
         elif cmd == "freq":
@@ -354,31 +277,12 @@ class TuiSink(PositionSink):
         else:
             self._set_status(f"Unknown command: {cmd}", style="red")
 
-    def _cmd_log(self, args: list[str]) -> None:
-        if self.log_buffer is None:
-            self._set_status("No log buffer attached", style="red")
-            return
-        if not args:
-            self._set_status(f"Log level: {self.log_buffer.min_level}", style="cyan")
-            return
-        level = args[0].upper()
-        if level not in self._VALID_LEVELS:
-            self._set_status(
-                f"Invalid level '{args[0]}'. Use: {', '.join(sorted(self._VALID_LEVELS))}",
-                style="red",
-            )
-            return
-        self.log_buffer.min_level = level
-        self._set_status(f"Log level → {level}")
-
     def _cmd_help(self) -> None:
         cmds = (
             ":aprs [on|off] – toggle APRS-IS",
-            ":clear – clear log buffer",
             ":freq <Hz|MHz> – set frequency",
             ":help – show this list",
             ":info – rig connection & status",
-            ":log [LEVEL] – show/set log filter level",
             ":mode <MODE> – set rig mode (FM, USB, …)",
             ":q / :quit – exit rigtop",
         )
@@ -401,13 +305,6 @@ class TuiSink(PositionSink):
         if i.get("gps"):
             parts.append(f"GPS:{i['gps']}")
         self._set_status("  ".join(parts) if parts else "No info", style="cyan", duration=6.0)
-
-    def _cmd_clear(self) -> None:
-        if self.log_buffer is None:
-            self._set_status("No log buffer attached", style="red")
-            return
-        self.log_buffer._records.clear()
-        self._set_status("Log cleared")
 
     def _cmd_mode(self, args: list[str]) -> None:
         if self.rig is None:
@@ -576,7 +473,7 @@ class TuiSink(PositionSink):
             bar.append(f" {self._status_msg}", style=f"{self._status_style} on grey23")
             bar.append(" " * 200, style="on grey23")
         else:
-            bar.append(" :aprs  :igate  :help  :info  :log  :q", style="dim on grey23")
+            bar.append(" :aprs  :igate  :help  :info  :q", style="dim on grey23")
             bar.append(" " * 200, style="on grey23")
         return bar
 
@@ -609,16 +506,6 @@ class TuiSink(PositionSink):
                 border_style="cyan",
                 expand=True,
             ))
-        if self.log_buffer is not None:
-            log_text = self.log_buffer.render(max_lines=5)
-            log_panel = Panel(
-                log_text,
-                title="[bold]Log[/bold]",
-                border_style="dim",
-                expand=True,
-            )
-            parts.append(log_panel)
-
         alert_title = self._build_title()
         outer = self._build_layout(parts, alert_title, "red")
 
@@ -653,14 +540,6 @@ class TuiSink(PositionSink):
         )
 
         parts: list = [alert_panel]
-        if self.log_buffer is not None:
-            log_text = self.log_buffer.render(max_lines=5)
-            parts.append(Panel(
-                log_text,
-                title="[bold]Log[/bold]",
-                border_style="dim",
-                expand=True,
-            ))
 
         wd_title = self._build_title()
         outer = self._build_layout(parts, wd_title, "red")
@@ -743,20 +622,31 @@ class TuiSink(PositionSink):
             "gps": gps_src,
         }
 
-        # ── Left pane: GPS ──
+        # ── Left pane: Station ──
         left = Text()
+        if self.rig_name:
+            left.append(f" {self.rig_name}\n", style="bold cyan")
         left.append(f" {format_position(pos.lat, pos.lon)}\n", style="bold white")
         left.append(f" {pos.lat:.6f}, {pos.lon:.6f}\n")
-        left.append(f" Grid  ", style="dim")
+        left.append(" Grid  ", style="dim")
         left.append(f"{grid}\n", style="bold green")
+        if pos.alt is not None:
+            left.append(" Alt   ", style="dim")
+            left.append(f"{pos.alt:.0f} m\n", style="bold")
         if gps_src:
-            left.append(f" GPS   ", style="dim")
+            left.append(" GPS   ", style="dim")
             left.append(f"{gps_src}\n", style="bold" if gps_src == "rig" else "yellow")
-        left.append(f"\n {now}", style="dim")
+        # Uptime
+        uptime_s = int(_time.monotonic() - self._start_time)
+        h, rem = divmod(uptime_s, 3600)
+        m, s = divmod(rem, 60)
+        left.append(" Up    ", style="dim")
+        left.append(f"{h}:{m:02d}:{s:02d}\n", style="dim")
+        left.append(f" {now}", style="dim")
 
         left_panel = Panel(
             left,
-            title="[bold]GPS[/bold]",
+            title="[bold]Station[/bold]",
             border_style="green",
             expand=True,
         )
@@ -798,45 +688,36 @@ class TuiSink(PositionSink):
             expand=True,
         )
 
-        # ── Combine side by side ──
+        # ── Combine side by side: Rig | GPS ──
         title = self._build_title(source_label)
+        top_row = Columns([right_panel, left_panel], equal=True, expand=True)
 
-        # ── Right column: GPS + Connections ──
+        # ── Connections (full-width row) ──
         conn_panel = self._render_connections()
-        right_col_parts = [left_panel]
-        if conn_panel is not None:
-            right_col_parts.append(conn_panel)
-        right_col = Group(*right_col_parts)
-
-        top_row = Columns([right_panel, right_col], equal=True, expand=True)
 
         # ── APRS pane ──
         aprs_panel = None
         if self.aprs_buffer is not None:
-            # Show RX count in APRS panel title
             aprsis = [s for s in self.peers if type(s).__name__ == "AprsIsSink"]
-            rx_info = f"  {aprsis[0].rx_count} pkts" if aprsis and aprsis[0].rx_count else ""
+            rx_info = ""
+            if aprsis and aprsis[0].rx_count:
+                rx_info += f"  IS:{aprsis[0].rx_count}"
+            dw = [s for s in self.peers if type(s).__name__ == "DirewolfClient"]
+            if dw and dw[0].rx_count:
+                rx_info += f"  RF:{dw[0].rx_count}"
             aprs_text = self.aprs_buffer.render(max_lines=12)
             aprs_panel = Panel(
                 aprs_text,
-                title=f"[bold]APRS-IS[/bold][dim]{rx_info}[/dim]",
+                title=f"[bold]APRS[/bold][dim]{rx_info}[/dim]",
                 border_style="cyan",
                 expand=True,
             )
 
-        # ── Bottom pane: Log messages (fills remaining terminal height) ──
         parts: list = [top_row]
+        if conn_panel is not None:
+            parts.append(conn_panel)
         if aprs_panel is not None:
             parts.append(aprs_panel)
-        if self.log_buffer is not None:
-            log_text = self.log_buffer.render(max_lines=5)
-            log_panel = Panel(
-                log_text,
-                title="[bold]Log[/bold]",
-                border_style="dim",
-                expand=True,
-            )
-            parts.append(log_panel)
 
         outer = self._build_layout(parts, title, "blue")
 

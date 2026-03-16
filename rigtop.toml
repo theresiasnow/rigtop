@@ -5,7 +5,7 @@ meters = true
 log_level = "DEBUG"
 
 [rig]
-name = "default"
+name = "IC-705"
 host = "127.0.0.1"
 port = 4532
 
@@ -33,6 +33,10 @@ qsy_mode = "FM"
 
 [watchdog]
 tx_timeout = 120       # force PTT off after this many seconds of continuous TX
+
+[direwolf]
+host = "127.0.0.1"
+port = 8001            # Direwolf KISS TCP port
 
 [[sink]]
 type = "tui"

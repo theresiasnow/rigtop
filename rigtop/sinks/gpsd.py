@@ -43,7 +43,7 @@ def _tpv(pos: Position) -> dict:
         "class": "TPV",
         "device": "/dev/rigtop",
         "mode": 3,  # 3-D fix
-        "time": datetime.datetime.now(datetime.timezone.utc).strftime(
+        "time": datetime.datetime.now(datetime.UTC).strftime(
             "%Y-%m-%dT%H:%M:%S.000Z"
         ),
         "lat": round(pos.lat, 8),
@@ -54,7 +54,7 @@ def _tpv(pos: Position) -> dict:
 class _GpsdClient:
     """State machine for a single gpsd client connection."""
 
-    __slots__ = ("sock", "addr", "watching")
+    __slots__ = ("addr", "sock", "watching")
 
     def __init__(self, sock: socket.socket, addr: tuple) -> None:
         self.sock = sock
@@ -129,7 +129,7 @@ class GpsdSink(PositionSink):
                 )
                 t.start()
                 self._reader_threads.append(t)
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except OSError:
                 break
@@ -146,7 +146,7 @@ class GpsdSink(PositionSink):
                 while b"\n" in buf:
                     line, buf = buf.split(b"\n", 1)
                     self._handle_command(client, line.decode("ascii", errors="replace").strip())
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except OSError:
                 break
