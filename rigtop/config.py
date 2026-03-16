@@ -92,10 +92,12 @@ class GpsConfig(BaseModel):
 
 
 class SinkConfig(BaseModel):
-    type: Literal["console", "tui", "wsjtx"]
+    type: Literal["console", "direwolf", "gpsd", "tui", "wsjtx"]
     host: str = "127.0.0.1"
     port: int = Field(default=2237, ge=1, le=65535)
     nmea: bool = False
+    device: str = ""          # serial port for direwolf sink (e.g. COM10)
+    baudrate: int = 4800       # serial baud rate for direwolf sink
 
 
 class Config(BaseModel):

@@ -34,3 +34,18 @@ type = "tui"
 type = "wsjtx"
 host = "127.0.0.1"
 port = 2237
+
+[[sink]]
+type = "direwolf"
+device = "COM10"       # rigtop writes here (VSPD pair COM10↔COM11)
+# baudrate = 4800      # Direwolf conf: GPSNMEA COM11
+
+[[sink]]
+type = "direwolf"
+device = "COM12"       # rigtop writes here (VSPD pair COM12↔COM13)
+# baudrate = 4800      # PinPoint GPS: COM13
+
+[[sink]]
+type = "gpsd"
+host = "127.0.0.1"
+port = 2947

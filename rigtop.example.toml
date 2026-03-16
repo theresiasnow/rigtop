@@ -51,3 +51,20 @@ type = "tui"           # full-screen dashboard (default)
 # type = "wsjtx"       # send grid locator to WSJT-X via UDP
 # host = "127.0.0.1"
 # port = 2237
+
+# [[sink]]
+# type = "direwolf"    # NMEA GPS sentences for Direwolf
+# # TCP mode (Linux):  Direwolf conf: GPSNMEA host=localhost:10110
+# host = "127.0.0.1"
+# port = 10110
+# # Serial mode (Windows): set device to a virtual COM port (com0com)
+# # rigtop writes to COM10, Direwolf reads COM11: GPSNMEA COM11
+# # device = "COM10"
+# # baudrate = 4800
+
+# [[sink]]
+# type = "gpsd"         # gpsd-compatible JSON GPS server
+# host = "127.0.0.1"   # listen address
+# port = 2947           # listen port (gpsd default)
+# # Works with: gpspipe, cgps, Xastir, YAAC, any libgps client
+# # In direwolf.conf:  GPSD localhost:2947

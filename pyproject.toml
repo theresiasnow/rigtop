@@ -12,6 +12,7 @@ dependencies = [
     "loguru>=0.7.3",
     "pydantic>=2.12.5",
     "pynmea2>=1.19.0",
+    "pyserial>=3.5",
     "rich>=13.0",
 ]
 

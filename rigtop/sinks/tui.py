@@ -194,6 +194,7 @@ class TuiSink(PositionSink):
         self._console = Console()
         self._live: Live | None = None
         self.log_buffer: TuiLogBuffer | None = None
+        self.peers: list = []  # sibling sinks (set by main.py)
         # Command input state (k9s-style)
         self.command_mode: bool = False
         self.command_buf: str = ""
@@ -422,6 +423,52 @@ class TuiSink(PositionSink):
             self._last_border = "red"
             self._live.update(outer, refresh=False)
 
+    def _render_connections(self) -> Panel | None:
+        """Build the Connections panel from peer sinks."""
+        if not self.peers:
+            return None
+        all_conns = []
+        for peer in self.peers:
+            all_conns.extend(peer.connections())
+        if not all_conns:
+            return None
+
+        txt = Text()
+        for i, c in enumerate(all_conns):
+            status = c.get("status", "?")
+            kind = c.get("kind", "")
+            label = c.get("label", "?")
+            clients = c.get("clients", [])
+
+            # Status dot
+            if status == "open":
+                txt.append(" ● ", style="bold green")
+            elif status == "listening":
+                txt.append(" ● ", style="bold cyan")
+            elif status == "ready":
+                txt.append(" ● ", style="bold yellow")
+            else:
+                txt.append(" ○ ", style="dim red")
+
+            txt.append(label, style="bold")
+            txt.append(f"  {kind}", style="dim")
+            txt.append(f"  {status}", style="dim")
+
+            if clients:
+                txt.append(f"  ({len(clients)})" if kind == "tcp" else "")
+                for addr in clients:
+                    txt.append(f"\n     └ {addr}", style="dim")
+
+            if i < len(all_conns) - 1:
+                txt.append("\n")
+
+        return Panel(
+            txt,
+            title="[bold]Connections[/bold]",
+            border_style="magenta",
+            expand=True,
+        )
+
     def send(self, pos: Position, grid: str, **kwargs) -> str | None:
         freq: str | None = kwargs.get("freq")
         mode: str | None = kwargs.get("mode")
@@ -503,12 +550,18 @@ class TuiSink(PositionSink):
 
         top_row = Columns([right_panel, left_panel], equal=True, expand=True)
 
+        # ── Middle pane: Connections ──
+        conn_panel = self._render_connections()
+
         # ── Bottom pane: Log messages (fills remaining terminal height) ──
         parts: list = [top_row]
+        if conn_panel is not None:
+            parts.append(conn_panel)
         if self.log_buffer is not None:
             # Top row panels ~14 rows, outer border 2, log border 2, cmd bar 1.
             term_h = self._console.size.height
-            log_lines = max(3, term_h - 19)
+            conn_overhead = 4 + len(self.peers) * 2 if conn_panel else 0
+            log_lines = max(3, term_h - 19 - conn_overhead)
             log_text = self.log_buffer.render(max_lines=log_lines)
             log_panel = Panel(
                 log_text,

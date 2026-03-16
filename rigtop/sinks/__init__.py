@@ -28,6 +28,14 @@ class PositionSink(ABC):
     @abstractmethod
     def close(self) -> None: ...
 
+    def connections(self) -> list[dict[str, Any]]:
+        """Return a list of active connection descriptors for the TUI.
+
+        Each dict has keys: label, kind (serial/tcp/udp), status, clients.
+        Override in subclasses that manage connections.
+        """
+        return []
+
     def __enter__(self):
         self.start()
         return self
@@ -71,5 +79,7 @@ def create_sink(config: dict[str, Any]) -> PositionSink:
 
 # Import concrete sinks to trigger registration
 import rigtop.sinks.console as _console  # noqa: F401, E402
+import rigtop.sinks.direwolf as _direwolf  # noqa: F401, E402
+import rigtop.sinks.gpsd as _gpsd  # noqa: F401, E402
 import rigtop.sinks.tui as _tui  # noqa: F401, E402
 import rigtop.sinks.wsjtx as _wsjtx  # noqa: F401, E402

@@ -8,6 +8,7 @@ Sinks: console, tui, wsjtx
 """
 
 import argparse
+import atexit
 import sys
 from pathlib import Path
 
@@ -103,6 +104,34 @@ def build_parser() -> argparse.ArgumentParser:
         "--wsjtx-port", type=int, default=None,
         help="WSJT-X UDP port (default: 2237)",
     )
+    sink_group.add_argument(
+        "--direwolf", action="store_true", default=False,
+        help="Also serve NMEA GPS to Direwolf via TCP",
+    )
+    sink_group.add_argument(
+        "--direwolf-host", default=None,
+        help="Direwolf NMEA TCP listen host (default: 127.0.0.1)",
+    )
+    sink_group.add_argument(
+        "--direwolf-port", type=int, default=None,
+        help="Direwolf NMEA TCP listen port (default: 10110)",
+    )
+    sink_group.add_argument(
+        "--direwolf-device", default=None,
+        help="Serial port for Direwolf NMEA (e.g. COM10) — Windows mode",
+    )
+    sink_group.add_argument(
+        "--gpsd", action="store_true", default=False,
+        help="Also serve GPS via gpsd-compatible JSON protocol",
+    )
+    sink_group.add_argument(
+        "--gpsd-host", default=None,
+        help="gpsd TCP listen host (default: 127.0.0.1)",
+    )
+    sink_group.add_argument(
+        "--gpsd-port", type=int, default=None,
+        help="gpsd TCP listen port (default: 2947)",
+    )
 
     return parser
 
@@ -165,6 +194,24 @@ def main():
             wsjtx_sink.port = args.wsjtx_port
         if not any(s.type == "wsjtx" for s in cfg.sinks):
             cfg.sinks.append(wsjtx_sink)
+    if args.direwolf:
+        dw_sink = SinkConfig(type="direwolf", port=10110)
+        if args.direwolf_host:
+            dw_sink.host = args.direwolf_host
+        if args.direwolf_port:
+            dw_sink.port = args.direwolf_port
+        if args.direwolf_device:
+            dw_sink.device = args.direwolf_device
+        if not any(s.type == "direwolf" for s in cfg.sinks):
+            cfg.sinks.append(dw_sink)
+    if args.gpsd:
+        gpsd_sink = SinkConfig(type="gpsd", port=2947)
+        if args.gpsd_host:
+            gpsd_sink.host = args.gpsd_host
+        if args.gpsd_port:
+            gpsd_sink.port = args.gpsd_port
+        if not any(s.type == "gpsd" for s in cfg.sinks):
+            cfg.sinks.append(gpsd_sink)
 
     # --- Create sinks early so the TUI log buffer exists before rigctld starts ---
     sinks = [create_sink(s.model_dump(exclude_defaults=False)) for s in cfg.sinks]
@@ -175,6 +222,7 @@ def main():
             tui_log_buf = TuiLogBuffer()
             tui_log_buf.min_level = cfg.log_level.value
             sink.log_buffer = tui_log_buf
+            sink.peers = [s for s in sinks if s is not sink]
             break
 
     # --- Auto-start rigctld if configured ---
@@ -201,6 +249,7 @@ def main():
         )
         try:
             launcher.start()
+            atexit.register(launcher.stop)
         except (FileNotFoundError, RuntimeError) as e:
             print(f"Error: {e}")
             sys.exit(1)
@@ -232,7 +281,10 @@ def main():
 
     # --- Start sinks ---
     for sink in sinks:
-        sink.start()
+        try:
+            sink.start()
+        except Exception as e:
+            logger.warning("Sink {} failed to start: {}", sink, e)
 
     # --- Run ---
     try:
