@@ -67,6 +67,7 @@ class AprsIsSink(PositionSink):
         self._keepalive_thread: threading.Thread | None = None
         self._receiver_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
+        self._beacon_enabled = True
         self._last_beacon = 0.0
         self._last_rx: float = 0.0    # monotonic time of last received packet
         self._rx_count: int = 0       # total received packets
@@ -186,6 +187,8 @@ class AprsIsSink(PositionSink):
                 self._connect()
 
     def send(self, pos: Position, grid: str, **kwargs) -> str | None:
+        if not self._beacon_enabled:
+            return None
         now = time.monotonic()
         if now - self._last_beacon < self._interval:
             return None

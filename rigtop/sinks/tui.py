@@ -198,13 +198,9 @@ class TuiSink(PositionSink):
     # ── Command handling ──
 
     def _build_layout(self, content_parts: list, title: str, border_style: str) -> Panel:
-        """Build the outer panel with command bar inserted above APRS pane."""
-        parts = list(content_parts)
+        """Build the outer panel with command bar inserted above Connections pane."""
         cmd_bar = self._render_command_bar()
-        if self.aprs_buffer is not None and len(parts) >= 2:
-            parts.insert(-1, cmd_bar)
-        else:
-            parts.append(cmd_bar)
+        parts = [content_parts[0], cmd_bar, *content_parts[1:]]
         return Panel(
             Group(*parts),
             title=title,
@@ -451,29 +447,45 @@ class TuiSink(PositionSink):
         self._status_until = _time.monotonic() + duration
 
     def _render_command_bar(self) -> Text:
-        """Render the command input bar with completion hints.
+        """Render k9s-style command/status bar.
 
-        Uses a light background so the bar is always clearly visible.
+        Normal mode:  hotkey hints like  <:>command  <ctrl-c>quit
+        Command mode: prompt with input, completions, and helper keys
+        Status flash: temporary message from a command result
         """
         bar = Text()
         if self.command_mode:
-            bar.append(" :", style="bold black on grey82")
-            bar.append(self.command_buf, style="bold black on grey82")
-            bar.append("█", style="bold black on grey82 blink")
-            # Pad to fill width then add hints
+            bar.append(" :", style="bold white on grey30")
+            bar.append(self.command_buf, style="bold white on grey30")
+            bar.append("█", style="bold white on grey30 blink")
+            # Completion hints
             completions = self._get_completions()
-            hints = ""
             if completions:
-                hints = "   " + "  ".join(completions)
-            hints += "   Tab complete  Esc cancel"
-            bar.append(hints, style="black on grey82")
-            # Fill rest of line with background
-            bar.append(" " * 200, style="on grey82")
+                bar.append("  ", style="on grey30")
+                for i, c in enumerate(completions[:6]):
+                    if i > 0:
+                        bar.append(" ", style="on grey30")
+                    bar.append(c, style="dim white on grey30")
+            # Helper keys on the right
+            bar.append("  ", style="on grey30")
+            bar.append("<tab>", style="bold cyan on grey30")
+            bar.append("complete ", style="dim on grey30")
+            bar.append("<esc>", style="bold cyan on grey30")
+            bar.append("cancel", style="dim on grey30")
+            bar.append(" " * 200, style="on grey30")
         elif self._status_msg and _time.monotonic() < self._status_until:
             bar.append(f" {self._status_msg}", style=f"{self._status_style} on grey23")
             bar.append(" " * 200, style="on grey23")
         else:
-            bar.append(" :aprs  :igate  :help  :info  :q", style="dim on grey23")
+            # k9s-style hotkey hints
+            bar.append(" ", style="on grey23")
+            hints = [
+                (":", "command"),
+                ("ctrl-c", "quit"),
+            ]
+            for key, label in hints:
+                bar.append(f"<{key}>", style="bold cyan on grey23")
+                bar.append(f"{label} ", style="dim on grey23")
             bar.append(" " * 200, style="on grey23")
         return bar
 

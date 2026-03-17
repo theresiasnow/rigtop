@@ -11,3 +11,6 @@ wheels/
 
 # Logs
 *.log
+
+# User config (use rigtop.example.toml as template)
+rigtop.toml

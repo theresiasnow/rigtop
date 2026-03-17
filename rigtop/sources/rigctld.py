@@ -66,6 +66,10 @@ class RigctldSource(GpsSource):
             except TimeoutError:
                 logger.debug("RX: (timeout)")
                 break
+            except (ConnectionResetError, ConnectionAbortedError, OSError) as e:
+                logger.warning("rigctld connection lost during recv: {}", e)
+                self._sock = None
+                return ""
         decoded = response.decode().strip()
         logger.debug("RX: {}", decoded)
         return decoded

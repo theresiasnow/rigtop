@@ -134,6 +134,7 @@ def run(
     # TX watchdog state
     _tx_start: float | None = None  # monotonic timestamp when TX began
     _wd_tripped: bool = False       # True after watchdog has fired (until RX resumes)
+    _prev_ptt: bool = False         # previous PTT state for edge detection
 
     if not has_tui:
         print(f"Rig:      {rig}")
@@ -176,6 +177,20 @@ def run(
 
                 # ── TX watchdog ──
                 ptt = extras["ptt"]
+                if ptt and not _prev_ptt:
+                    _tx_start = time.monotonic()
+                    logger.info("TX started")
+                elif not ptt and _prev_ptt:
+                    if _tx_start is not None:
+                        tx_dur = time.monotonic() - _tx_start
+                        logger.info("TX ended after {:.1f}s", tx_dur)
+                    else:
+                        logger.info("TX ended")
+                    if _wd_tripped:
+                        logger.info("TX watchdog reset — radio back to RX")
+                    _tx_start = None
+                    _wd_tripped = False
+                _prev_ptt = bool(ptt)
                 if watchdog and ptt is not None:
                     if ptt:
                         if _tx_start is None:
@@ -196,11 +211,7 @@ def run(
                                     tx_dur, watchdog.tx_timeout,
                                 )
                     else:
-                        # Back to RX — reset watchdog
-                        if _wd_tripped:
-                            logger.info("TX watchdog reset — radio back to RX")
-                        _tx_start = None
-                        _wd_tripped = False
+                        pass  # reset handled above in PTT transition logic
                 if meters:
                     m = rig.get_meters()
                     # Also grab TX power setting (0-1)

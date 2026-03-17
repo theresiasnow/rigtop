@@ -59,6 +59,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-meters", action="store_true", default=False,
         help="Disable rig meters",
     )
+    parser.add_argument(
+        "--no-beacon", action="store_true", default=False,
+        help="Disable APRS-IS position beaconing (still receives traffic)",
+    )
     return parser
 
 
@@ -91,6 +95,7 @@ def main():
         cfg.rigctld = None
     if args.no_gps:
         cfg.gps_fallback = None
+    beacon_disabled = args.no_beacon
     if args.console:
         from rigtop.config import SinkConfig
         cfg.sinks = [SinkConfig(type="console")]
@@ -105,6 +110,8 @@ def main():
         if hasattr(sink, "aprs_buffer") and hasattr(sink, "_receiver_loop"):
             aprs_buf = AprsBuffer()
             sink.aprs_buffer = aprs_buf
+            if beacon_disabled:
+                sink._beacon_enabled = False
             break
 
     # --- Direwolf KISS client (optional) ---
@@ -173,17 +180,21 @@ def main():
 
     # --- QSY: if [aprs] section has qsy_freq/qsy_mode, apply to rig ---
     if cfg.aprs:
-        if cfg.aprs.qsy_freq > 0:
-            freq_hz = int(cfg.aprs.qsy_freq * 1e6)
-            if rig.set_freq(freq_hz):
-                logger.info("QSY → {:.6f} MHz", cfg.aprs.qsy_freq)
-            else:
-                logger.error("Failed to QSY to {:.6f} MHz", cfg.aprs.qsy_freq)
-        if cfg.aprs.qsy_mode:
-            if rig.set_mode(cfg.aprs.qsy_mode):
-                logger.info("Mode → {}", cfg.aprs.qsy_mode)
-            else:
-                logger.error("Failed to set mode {}", cfg.aprs.qsy_mode)
+        try:
+            if cfg.aprs.qsy_freq > 0:
+                freq_hz = int(cfg.aprs.qsy_freq * 1e6)
+                if rig.set_freq(freq_hz):
+                    logger.info("QSY → {:.6f} MHz", cfg.aprs.qsy_freq)
+                else:
+                    logger.error("Failed to QSY to {:.6f} MHz", cfg.aprs.qsy_freq)
+            if cfg.aprs.qsy_mode:
+                if rig.set_mode(cfg.aprs.qsy_mode):
+                    logger.info("Mode → {}", cfg.aprs.qsy_mode)
+                else:
+                    logger.error("Failed to set mode {}", cfg.aprs.qsy_mode)
+        except (ConnectionError, OSError) as e:
+            print(f"⚠  Radio not responding — is it powered on and connected? ({e})")
+            logger.warning("QSY failed — radio disconnected: {}", e)
 
     # --- Optional GPS fallback ---
     gps_fallback = None
