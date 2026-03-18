@@ -155,6 +155,7 @@ class TuiSink(PositionSink):
     # Known commands and their arguments for tab completion
     _COMMANDS: ClassVar[dict[str, list[str]]] = {
         "aprs": ["on", "off"],
+        "data": ["on", "off"],
         "freq": [],
         "help": [],
         "igate": ["on", "off"],
@@ -172,6 +173,9 @@ class TuiSink(PositionSink):
         self.peers: list = []  # sibling sinks (set by main.py)
         self.rig = None  # RigctldSource reference (set by main.py)
         self.rig_name: str = ""  # radio name from config (set by main.py)
+        self.aprs_config = None  # AprsConfig reference (set by main.py)
+        self._saved_freq: int | None = None   # freq before :aprs on
+        self._saved_mode: str | None = None    # mode before :aprs on
         self._start_time: float = _time.monotonic()
         # Command input state (k9s-style)
         self.command_mode: bool = False
@@ -194,6 +198,16 @@ class TuiSink(PositionSink):
             screen=True,
         )
         self._live.start()
+        # Show splash while waiting for first poll
+        splash = Panel(
+            Text.from_markup(
+                "\n[bold cyan]rigtop[/bold cyan]\n\n"
+                "[dim]Connecting to rig…[/dim]\n"
+            ),
+            border_style="blue",
+            expand=True,
+        )
+        self._live.update(splash)
 
     # ── Command handling ──
 
@@ -260,6 +274,8 @@ class TuiSink(PositionSink):
         cmd, args = parts[0].lower(), parts[1:]
         if cmd == "aprs":
             self._cmd_aprs(args)
+        elif cmd == "data":
+            self._cmd_data(args)
         elif cmd == "igate":
             self._cmd_igate(args)
         elif cmd == "help":
@@ -276,6 +292,7 @@ class TuiSink(PositionSink):
     def _cmd_help(self) -> None:
         cmds = (
             ":aprs [on|off] – toggle APRS-IS",
+            ":data [on|off] – toggle data mode (FM↔PKTFM, USB↔PKTUSB)",
             ":freq <Hz|MHz> – set frequency",
             ":help – show this list",
             ":info – rig connection & status",
@@ -301,6 +318,52 @@ class TuiSink(PositionSink):
         if i.get("gps"):
             parts.append(f"GPS:{i['gps']}")
         self._set_status("  ".join(parts) if parts else "No info", style="cyan", duration=6.0)
+
+    # Mapping: base mode → data (PKT) mode
+    _DATA_MODE_MAP: ClassVar[dict[str, str]] = {
+        "FM": "PKTFM", "USB": "PKTUSB", "LSB": "PKTLSB",
+    }
+    _DATA_MODE_REVERSE: ClassVar[dict[str, str]] = {
+        v: k for k, v in _DATA_MODE_MAP.items()
+    }
+
+    def _cmd_data(self, args: list[str]) -> None:
+        """Toggle data mode: :data on → PKTUSB/PKTFM, :data off → USB/FM."""
+        if self.rig is None:
+            self._set_status("No rig connection", style="red")
+            return
+        current = self.rig.get_mode()
+        if not current:
+            self._set_status("Cannot read current mode", style="red")
+            return
+        is_data = current in self._DATA_MODE_REVERSE
+        if not args:
+            self._set_status(f"Data mode: {'ON' if is_data else 'OFF'} ({current})", style="cyan")
+            return
+        action = args[0].lower()
+        if action == "on":
+            if is_data:
+                self._set_status(f"Data already ON ({current})", style="yellow")
+                return
+            target = self._DATA_MODE_MAP.get(current)
+            if not target:
+                self._set_status(f"No data mode for {current}", style="red")
+                return
+            if self.rig.set_mode(target):
+                self._set_status(f"Data ON: {current} → {target}")
+            else:
+                self._set_status(f"Failed to set {target}", style="red")
+        elif action == "off":
+            if not is_data:
+                self._set_status(f"Data already OFF ({current})", style="yellow")
+                return
+            target = self._DATA_MODE_REVERSE[current]
+            if self.rig.set_mode(target):
+                self._set_status(f"Data OFF: {current} → {target}")
+            else:
+                self._set_status(f"Failed to set {target}", style="red")
+        else:
+            self._set_status("Usage: :data [on|off]", style="red")
 
     def _cmd_mode(self, args: list[str]) -> None:
         if self.rig is None:
@@ -368,19 +431,57 @@ class TuiSink(PositionSink):
             return
         action = args[0].lower()
         if action == "on":
+            # Save current freq/mode so :aprs off can restore them
+            if self.rig is not None:
+                try:
+                    freq_str = self.rig.get_frequency()
+                    self._saved_freq = int(freq_str) if freq_str else None
+                except (ValueError, TypeError):
+                    self._saved_freq = None
+                self._saved_mode = self.rig.get_mode()
+            # QSY to APRS frequency + mode (from [aprs] config)
+            qsy_parts: list[str] = []
+            if self.rig is not None and self.aprs_config is not None:
+                if self.aprs_config.qsy_freq > 0:
+                    freq_hz = int(self.aprs_config.qsy_freq * 1e6)
+                    if self.rig.set_freq(freq_hz):
+                        qsy_parts.append(f"{self.aprs_config.qsy_freq:.3f} MHz")
+                if self.aprs_config.qsy_mode:
+                    target_mode = self.aprs_config.qsy_mode
+                    # Ensure data mode is off (use base mode, not PKT variant)
+                    base = self._DATA_MODE_REVERSE.get(target_mode, target_mode)
+                    if self.rig.set_mode(base):
+                        qsy_parts.append(base)
+            # Start APRS sinks
             started = []
             for s in sinks:
                 if not s.connected:
                     s.start()
                     started.append(str(s))
+            status = "APRS ON"
+            if qsy_parts:
+                status += f" ({', '.join(qsy_parts)})"
             if started:
-                self._set_status(f"APRS started: {', '.join(started)}")
-            else:
-                self._set_status("APRS already running", style="yellow")
+                status += f" — started {', '.join(started)}"
+            self._set_status(status)
         elif action == "off":
             for s in sinks:
                 s.close()
-            self._set_status(f"APRS stopped ({len(sinks)} sink{'s' if len(sinks) != 1 else ''})")
+            # Restore previous freq/mode
+            restored: list[str] = []
+            if self.rig is not None:
+                if self._saved_freq is not None:
+                    if self.rig.set_freq(self._saved_freq):
+                        restored.append(f"{self._saved_freq / 1e6:.6f} MHz")
+                    self._saved_freq = None
+                if self._saved_mode is not None:
+                    if self.rig.set_mode(self._saved_mode):
+                        restored.append(self._saved_mode)
+                    self._saved_mode = None
+            status = f"APRS stopped ({len(sinks)} sink{'s' if len(sinks) != 1 else ''})"
+            if restored:
+                status += f" — restored {', '.join(restored)}"
+            self._set_status(status)
         else:
             self._set_status("Usage: :aprs [on|off]", style="red")
 

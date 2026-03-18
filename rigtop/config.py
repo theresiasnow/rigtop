@@ -110,13 +110,15 @@ class AprsConfig(BaseModel):
 
 
 class SinkConfig(BaseModel):
-    type: Literal["aprsis", "console", "nmea", "gpsd", "tui", "wsjtx"]
+    type: Literal["aprsis", "civ_proxy", "console", "nmea", "gpsd", "tui", "wsjtx"]
     enabled: bool = True
     host: str = "127.0.0.1"
     port: int = Field(default=0, ge=0, le=65535)  # 0 = use sink-type default
     nmea: bool = False
-    device: str = ""          # serial port for nmea sink (e.g. COM10)
-    baudrate: int = 4800       # serial baud rate for nmea sink
+    device: str = ""          # serial port for nmea/civ_proxy sink
+    baudrate: int = 4800       # serial baud rate for nmea/civ_proxy sink
+    rig_addr: int = 0          # CI-V address override (0 = auto from rig_name)
+    rig_name: str = ""         # rig model for CI-V address lookup
     callsign: str = ""        # APRS-IS callsign (aprsis sink)
     server: str = ""           # APRS-IS server host (aprsis sink)
     passcode: str = ""         # APRS-IS passcode (aprsis sink)

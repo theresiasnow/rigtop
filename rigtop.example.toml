@@ -105,3 +105,12 @@ type = "tui"           # full-screen dashboard (default)
 # comment = "rigtop"    # APRS comment text
 # aprs_filter = "r/59.2/18.1/200"  # server filter (blank = auto from GPS position)
 # # Filter examples:  r/lat/lon/range(km)  b/CALL1/CALL2  t/poimqstunw
+
+# [[sink]]
+# type = "civ_proxy"    # ICOM CI-V proxy — lets HRD/other CAT talk via rigctld
+# device = "COM14"      # virtual serial port (rigtop writes here)
+# baudrate = 19200      # baud rate to match HRD's setting
+# rig_addr = 0          # CI-V address (0 = auto from rig_name: IC-705→0xA4)
+# rig_name = "IC-705"   # rig model for auto CI-V address lookup
+# # HRD connects to the other end of the virtual pair (e.g. COM15).
+# # Use VSPD or com0com to create the pair (COM14↔COM15).

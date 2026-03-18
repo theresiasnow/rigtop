@@ -176,8 +176,12 @@ def main():
         if getattr(sink, "tui", False):
             sink.rig = rig
             sink.rig_name = cfg.rig.name
+            sink.aprs_config = cfg.aprs
             break
-
+    # Wire CI-V proxy sinks to rigctld for write commands
+    for sink in sinks:
+        if hasattr(sink, 'set_rigctld_callback'):
+            sink.set_rigctld_callback(rig._send_command)
     # --- QSY: if [aprs] section has qsy_freq/qsy_mode, apply to rig ---
     if cfg.aprs:
         try:

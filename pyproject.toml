@@ -22,7 +22,7 @@ dev = [
 ]
 
 [project.scripts]
-rigtop = "main:main"
+rigtop = "rigtop.cli:main"
 
 [tool.ruff]
 target-version = "py314"
