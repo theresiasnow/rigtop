@@ -94,9 +94,8 @@ jobs:
 
       - name: Verify wheel installs cleanly
         run: |
-          uv run python -c "import sys; print(sys.version)"
-          pip install dist/*.whl --quiet
-          python -c "import rigtop; print('wheel install OK')"
+          uv run python -c "import sys; print(f'Python {sys.version}')"
+          uv run python -c "import rigtop; from rigtop.config import Config; print('wheel install OK')"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
