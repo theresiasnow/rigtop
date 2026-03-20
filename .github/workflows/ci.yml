@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "feat/**", "fix/**", "refactor/**", "chore/**"]
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.14
+        run: uv python install 3.14
+
+      - name: Install dev dependencies
+        run: uv sync --group dev
+
+      - name: Ruff — lint
+        run: uv run ruff check rigtop/
+
+      - name: Ruff — format check
+        run: uv run ruff format --check rigtop/
+
+  smoke:
+    name: Smoke test (Python ${{ matrix.python }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python }}
+        run: uv python install ${{ matrix.python }}
+
+      - name: Install package
+        run: uv sync
+
+      - name: Import smoke test
+        run: |
+          uv run python -c "
+          import rigtop
+          from rigtop.config import load_config, Config
+          from rigtop.sinks.tui import TuiSink
+          from rigtop.sources.rigctld import RigctldSource
+          from rigtop.geo import maidenhead
+          print('All imports OK')
+          c = Config()
+          print(f'Default config: rig={c.rig.host}:{c.rig.port}  sinks={[s.type for s in c.sinks]}')
+          "
+
+      - name: CLI --help
+        run: uv run python -m rigtop --help
+
+  build:
+    name: Build wheel
+    runs-on: ubuntu-latest
+    needs: [lint, smoke]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.14
+        run: uv python install 3.14
+
+      - name: Build sdist + wheel
+        run: uv build
+
+      - name: Verify wheel installs cleanly
+        run: |
+          uv run python -c "import sys; print(sys.version)"
+          pip install dist/*.whl --quiet
+          python -c "import rigtop; print('wheel install OK')"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ github.sha }}
+          path: dist/
+          retention-days: 30
