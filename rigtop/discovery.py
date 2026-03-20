@@ -18,7 +18,7 @@ from loguru import logger
 _PORTS: dict[int, str] = {
     50001: "Icom CI-V control",
     50002: "Icom audio stream",
-    4532:  "rigctld",
+    4532: "rigctld",
 }
 
 
@@ -65,7 +65,7 @@ def _probe(host: str, port: int, timeout: float) -> dict | None:
             s.settimeout(0.5)
             try:
                 banner = s.recv(256).decode("ascii", errors="replace").strip()
-            except (TimeoutError, OSError):
+            except TimeoutError, OSError:
                 banner = ""
             return {
                 "host": host,
@@ -73,7 +73,7 @@ def _probe(host: str, port: int, timeout: float) -> dict | None:
                 "service": _PORTS.get(port, "unknown"),
                 "banner": banner,
             }
-    except (OSError, TimeoutError):
+    except OSError, TimeoutError:
         return None
 
 
@@ -117,10 +117,7 @@ def scan_lan(
     scanned = 0
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {
-            pool.submit(_probe, h, p, timeout): (h, p)
-            for h, p in targets
-        }
+        futures = {pool.submit(_probe, h, p, timeout): (h, p) for h, p in targets}
         for future in as_completed(futures):
             scanned += 1
             if progress_cb and scanned % 50 == 0:
@@ -130,10 +127,12 @@ def scan_lan(
                 results.append(r)
 
     # Sort by IP then port
-    results.sort(key=lambda r: (
-        struct.pack("!I", int(ipaddress.IPv4Address(r["host"]))),
-        r["port"],
-    ))
+    results.sort(
+        key=lambda r: (
+            struct.pack("!I", int(ipaddress.IPv4Address(r["host"]))),
+            r["port"],
+        )
+    )
     return results
 
 

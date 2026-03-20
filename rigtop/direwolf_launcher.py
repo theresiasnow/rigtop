@@ -34,19 +34,15 @@ class DirewolfLauncher:
         exe = self.install_path / "direwolf.exe"
         if not exe.is_file():
             raise FileNotFoundError(
-                f"direwolf.exe not found at {exe}. "
-                f"Check [direwolf] install_path in rigtop.toml."
+                f"direwolf.exe not found at {exe}. Check [direwolf] install_path in rigtop.toml."
             )
         if not self.config_file:
             raise RuntimeError(
-                "No config_file set — call switch_config() or "
-                "use :aprs on / :bbs on first."
+                "No config_file set — call switch_config() or use :aprs on / :bbs on first."
             )
         conf = self.install_path / self.config_file
         if not conf.is_file():
-            raise FileNotFoundError(
-                f"Config file not found: {conf}."
-            )
+            raise FileNotFoundError(f"Config file not found: {conf}.")
         cmd = [str(exe), "-c", str(conf)]
         cmd.extend(self.extra_args)
         return cmd
@@ -66,7 +62,8 @@ class DirewolfLauncher:
         # Direwolf writes to stdout; merge via STDOUT redirect.
         if self._proc.stdout:
             self._stderr_thread = threading.Thread(
-                target=self._read_output, daemon=True,
+                target=self._read_output,
+                daemon=True,
             )
             self._stderr_thread.start()
         time.sleep(settle)

@@ -29,47 +29,67 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="rigtop",
         description="Ham radio rig dashboard — GPS, frequency, mode, meters.\n"
-                    "Configure sinks and settings in rigtop.toml.",
+        "Configure sinks and settings in rigtop.toml.",
     )
     parser.add_argument(
-        "-c", "--config", type=Path, default=None,
+        "-c",
+        "--config",
+        type=Path,
+        default=None,
         help="Path to TOML config file (auto-discovers rigtop.toml)",
     )
     parser.add_argument(
-        "--log-level", default=None,
+        "--log-level",
+        default=None,
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Log level (also controls rigctld verbosity)",
     )
     parser.add_argument(
-        "--console", action="store_true", default=False,
+        "--console",
+        action="store_true",
+        default=False,
         help="Use plain console output instead of TUI",
     )
     parser.add_argument(
-        "--once", action="store_true", default=None,
+        "--once",
+        action="store_true",
+        default=None,
         help="Read position once and exit",
     )
     parser.add_argument(
-        "--no-rigctld", action="store_true", default=False,
+        "--no-rigctld",
+        action="store_true",
+        default=False,
         help="Don't auto-start rigctld (assume it's already running)",
     )
     parser.add_argument(
-        "--no-direwolf", action="store_true", default=False,
+        "--no-direwolf",
+        action="store_true",
+        default=False,
         help="Don't auto-start Direwolf (assume it's already running)",
     )
     parser.add_argument(
-        "--no-gps", action="store_true", default=False,
+        "--no-gps",
+        action="store_true",
+        default=False,
         help="Disable GPS fallback even if configured",
     )
     parser.add_argument(
-        "--no-meters", action="store_true", default=False,
+        "--no-meters",
+        action="store_true",
+        default=False,
         help="Disable rig meters",
     )
     parser.add_argument(
-        "--no-beacon", action="store_true", default=False,
+        "--no-beacon",
+        action="store_true",
+        default=False,
         help="Disable APRS-IS position beaconing (still receives traffic)",
     )
     parser.add_argument(
-        "--scan", action="store_true", default=False,
+        "--scan",
+        action="store_true",
+        default=False,
         help="Scan LAN for radios and rigctld instances, then exit",
     )
     return parser
@@ -82,10 +102,12 @@ def main():
     # --- LAN scan mode (--scan) ---
     if args.scan:
         from rigtop.discovery import format_results, scan_lan
+
         print("Scanning LAN for radio services…")
         results = scan_lan(
             progress_cb=lambda done, total: print(
-                f"  {done}/{total}", end="\r",
+                f"  {done}/{total}",
+                end="\r",
             ),
         )
         print(format_results(results))
@@ -122,6 +144,7 @@ def main():
     beacon_disabled = args.no_beacon
     if args.console:
         from rigtop.config import SinkConfig
+
         cfg.sinks = [SinkConfig(type="console")]
 
     # --- Create sinks early so the TUI log buffer exists before rigctld starts ---
@@ -231,7 +254,7 @@ def main():
             break
     # Wire CI-V proxy sinks to rigctld for write commands
     for sink in sinks:
-        if hasattr(sink, 'set_rigctld_callback'):
+        if hasattr(sink, "set_rigctld_callback"):
             sink.set_rigctld_callback(rig._send_command)
     # --- QSY: only if [aprs] enabled (otherwise :aprs on / :bbs on does it) ---
     if cfg.aprs and cfg.aprs.enabled:
@@ -286,6 +309,7 @@ def main():
     static_pos = None
     if cfg.gps_static is not None and cfg.gps_static.enabled:
         from rigtop.sources import Position
+
         static_pos = Position(
             lat=cfg.gps_static.lat,
             lon=cfg.gps_static.lon,
@@ -295,9 +319,16 @@ def main():
     # --- Run ---
     print("Ready ✓")
     try:
-        run(rig, sinks, interval=cfg.interval, once=cfg.once, meters=cfg.meters,
-            gps_fallback=gps_fallback, watchdog=cfg.watchdog,
-            static_pos=static_pos)
+        run(
+            rig,
+            sinks,
+            interval=cfg.interval,
+            once=cfg.once,
+            meters=cfg.meters,
+            gps_fallback=gps_fallback,
+            watchdog=cfg.watchdog,
+            static_pos=static_pos,
+        )
     except KeyboardInterrupt:
         pass
     finally:

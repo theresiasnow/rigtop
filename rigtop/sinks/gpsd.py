@@ -43,9 +43,7 @@ def _tpv(pos: Position) -> dict:
         "class": "TPV",
         "device": "/dev/rigtop",
         "mode": 3,  # 3-D fix
-        "time": datetime.datetime.now(datetime.UTC).strftime(
-            "%Y-%m-%dT%H:%M:%S.000Z"
-        ),
+        "time": datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
         "lat": round(pos.lat, 8),
         "lon": round(pos.lon, 8),
     }
@@ -124,9 +122,7 @@ class GpsdSink(PositionSink):
                 with self._lock:
                     self._clients.append(client)
                 logger.info("gpsd client connected: {}:{}", addr[0], addr[1])
-                t = threading.Thread(
-                    target=self._read_client, args=(client,), daemon=True
-                )
+                t = threading.Thread(target=self._read_client, args=(client,), daemon=True)
                 t.start()
                 self._reader_threads.append(t)
             except TimeoutError:
@@ -208,12 +204,12 @@ class GpsdSink(PositionSink):
 
     def connections(self) -> list[dict]:
         with self._lock:
-            client_addrs = [
-                f"{c.addr[0]}:{c.addr[1]}" for c in self._clients
-            ]
-        return [{
-            "label": f"gpsd  {self.host}:{self.port}",
-            "kind": "tcp",
-            "status": "listening" if self._server else "closed",
-            "clients": client_addrs,
-        }]
+            client_addrs = [f"{c.addr[0]}:{c.addr[1]}" for c in self._clients]
+        return [
+            {
+                "label": f"gpsd  {self.host}:{self.port}",
+                "kind": "tcp",
+                "status": "listening" if self._server else "closed",
+                "clients": client_addrs,
+            }
+        ]

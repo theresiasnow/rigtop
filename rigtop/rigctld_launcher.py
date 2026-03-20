@@ -67,11 +67,16 @@ class RigctldLauncher:
             )
         cmd = [
             exe,
-            "-m", str(self.model),
-            "-r", self.serial_port,
-            "-s", str(self.baud_rate),
-            "-T", self.listen_host,
-            "-t", str(self.listen_port),
+            "-m",
+            str(self.model),
+            "-r",
+            self.serial_port,
+            "-s",
+            str(self.baud_rate),
+            "-T",
+            self.listen_host,
+            "-t",
+            str(self.listen_port),
         ]
         # PTT flags.
         if self.ptt_type != "RIG":
@@ -110,7 +115,8 @@ class RigctldLauncher:
         # Spawn a reader thread for stderr if a callback was provided.
         if self.stderr_callback and self._proc.stderr:
             self._stderr_thread = threading.Thread(
-                target=self._read_stderr, daemon=True,
+                target=self._read_stderr,
+                daemon=True,
             )
             self._stderr_thread.start()
         # Give rigctld a moment to bind the TCP port.

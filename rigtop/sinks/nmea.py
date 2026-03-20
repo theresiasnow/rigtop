@@ -178,12 +178,14 @@ class NmeaSink(PositionSink):
     def connections(self) -> list[dict]:
         if self._is_serial:
             is_open = self._serial is not None and self._serial.is_open
-            return [{
-                "label": f"nmea  {self.device}",
-                "kind": "serial",
-                "status": "open" if is_open else "closed",
-                "clients": [f"{self.baudrate} baud"] if is_open else [],
-            }]
+            return [
+                {
+                    "label": f"nmea  {self.device}",
+                    "kind": "serial",
+                    "status": "open" if is_open else "closed",
+                    "clients": [f"{self.baudrate} baud"] if is_open else [],
+                }
+            ]
         with self._lock:
             client_addrs = []
             for sock in self._clients:
@@ -192,9 +194,11 @@ class NmeaSink(PositionSink):
                     client_addrs.append(f"{peer[0]}:{peer[1]}")
                 except OSError:
                     pass
-        return [{
-            "label": f"nmea  {self.host}:{self.port}",
-            "kind": "tcp",
-            "status": "listening" if self._server else "closed",
-            "clients": client_addrs,
-        }]
+        return [
+            {
+                "label": f"nmea  {self.host}:{self.port}",
+                "kind": "tcp",
+                "status": "listening" if self._server else "closed",
+                "clients": client_addrs,
+            }
+        ]

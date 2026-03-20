@@ -24,6 +24,7 @@ def _key_listener(stop: threading.Event, tui_sink=None) -> None:
     """Background thread: ':q' to quit, route commands to TUI."""
     if sys.platform == "win32":
         import msvcrt
+
         while not stop.is_set():
             if msvcrt.kbhit():
                 ch = msvcrt.getwch()
@@ -65,6 +66,7 @@ def _key_listener(stop: threading.Event, tui_sink=None) -> None:
     else:
         import termios
         import tty
+
         fd = sys.stdin.fileno()
         old = termios.tcgetattr(fd)
         try:
@@ -133,8 +135,8 @@ def run(
 
     # TX watchdog state
     _tx_start: float | None = None  # monotonic timestamp when TX began
-    _wd_tripped: bool = False       # True after watchdog has fired (until RX resumes)
-    _prev_ptt: bool = False         # previous PTT state for edge detection
+    _wd_tripped: bool = False  # True after watchdog has fired (until RX resumes)
+    _prev_ptt: bool = False  # previous PTT state for edge detection
 
     if not has_tui:
         print(f"Rig:      {rig}")
@@ -201,14 +203,16 @@ def run(
                             logger.critical(
                                 "TX WATCHDOG: transmitting for {:.0f}s "
                                 "(limit {}s) — forcing PTT off",
-                                tx_dur, watchdog.tx_timeout,
+                                tx_dur,
+                                watchdog.tx_timeout,
                             )
                             rig.set_ptt(False)
                             extras["ptt"] = False
                             extras["wd_tripped"] = True
                             if tui_sink is not None:
                                 tui_sink.show_watchdog_alert(
-                                    tx_dur, watchdog.tx_timeout,
+                                    tx_dur,
+                                    watchdog.tx_timeout,
                                 )
                     else:
                         pass  # reset handled above in PTT transition logic
@@ -226,8 +230,7 @@ def run(
                 # Print summary (non-TUI only)
                 if not has_tui:
                     print(
-                        f"[{now_str}] {pos.lat:.6f}, {pos.lon:.6f}"
-                        f"  Grid: {grid}  (GPS: {gps_src})"
+                        f"[{now_str}] {pos.lat:.6f}, {pos.lon:.6f}  Grid: {grid}  (GPS: {gps_src})"
                     )
                     freq = extras.get("freq")
                     mode = extras.get("mode")

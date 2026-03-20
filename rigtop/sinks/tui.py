@@ -174,11 +174,11 @@ def _meter_bar(name: str, value: float, width: int = 20) -> Text:
     """Render a single meter as a labeled bar."""
     # Normalise to 0..1
     if name == "STRENGTH":
-        norm = (value + 54) / 114          # -54 .. +60 → 0 .. 1
+        norm = (value + 54) / 114  # -54 .. +60 → 0 .. 1
     elif name == "SWR":
         norm = min((value - 1.0) / 4.0, 1.0)  # 1 .. 5 → 0 .. 1
     else:
-        norm = value                        # already 0 .. 1
+        norm = value  # already 0 .. 1
 
     norm = max(0.0, min(1.0, norm))
     filled = int(norm * width)
@@ -236,8 +236,19 @@ class TuiSink(PositionSink):
         "help": [],
         "igate": ["on", "off"],
         "info": [],
-        "mode": ["USB", "LSB", "FM", "AM", "CW", "CWR", "RTTY", "RTTYR",
-                 "PKTUSB", "PKTLSB", "PKTFM"],
+        "mode": [
+            "USB",
+            "LSB",
+            "FM",
+            "AM",
+            "CW",
+            "CWR",
+            "RTTY",
+            "RTTYR",
+            "PKTUSB",
+            "PKTLSB",
+            "PKTFM",
+        ],
         "msg": [],
         "q": [],
         "quit": [],
@@ -253,11 +264,11 @@ class TuiSink(PositionSink):
         self.rig = None  # RigctldSource reference (set by main.py)
         self.rig_name: str = ""  # radio name from config (set by main.py)
         self.aprs_config = None  # AprsConfig reference (set by main.py)
-        self.bbs_config = None   # BbsConfig reference (set by cli.py)
+        self.bbs_config = None  # BbsConfig reference (set by cli.py)
         self.dw_launcher = None  # DirewolfLauncher reference (set by cli.py)
         self.dw_buffer: DirewolfBuffer | None = None  # Direwolf output (set by cli.py)
-        self._saved_freq: int | None = None   # freq before :aprs/:bbs on
-        self._saved_mode: str | None = None    # mode before :aprs/:bbs on
+        self._saved_freq: int | None = None  # freq before :aprs/:bbs on
+        self._saved_mode: str | None = None  # mode before :aprs/:bbs on
         self._bbs_active: bool = False
         self._start_time: float = _time.monotonic()
         # Command input state (k9s-style)
@@ -274,9 +285,9 @@ class TuiSink(PositionSink):
         # TX watchdog state
         self._wd_tripped: bool = False
         # TX hold — keep showing TX state briefly after PTT drops
-        self._tx_hold_until: float = 0.0      # monotonic deadline
+        self._tx_hold_until: float = 0.0  # monotonic deadline
         self._tx_hold_meters: dict[str, float] = {}  # last TX meters
-        self._tx_hold_secs: float = 3.0       # how long to hold
+        self._tx_hold_secs: float = 3.0  # how long to hold
 
     def start(self) -> None:
         self._live = Live(
@@ -287,10 +298,7 @@ class TuiSink(PositionSink):
         self._live.start()
         # Show splash while waiting for first poll
         splash = Panel(
-            Text.from_markup(
-                "\n[bold cyan]rigtop[/bold cyan]\n\n"
-                "[dim]Connecting to rig…[/dim]\n"
-            ),
+            Text.from_markup("\n[bold cyan]rigtop[/bold cyan]\n\n[dim]Connecting to rig…[/dim]\n"),
             border_style="blue",
             expand=True,
         )
@@ -312,7 +320,9 @@ class TuiSink(PositionSink):
         """Rebuild and push the display with a fresh command bar."""
         if self._live and self._last_parts is not None:
             outer = self._build_layout(
-                self._last_parts, self._last_title, self._last_border,
+                self._last_parts,
+                self._last_title,
+                self._last_border,
             )
             self._live.update(outer)
 
@@ -420,11 +430,11 @@ class TuiSink(PositionSink):
 
     # Mapping: base mode → data (PKT) mode
     _DATA_MODE_MAP: ClassVar[dict[str, str]] = {
-        "FM": "PKTFM", "USB": "PKTUSB", "LSB": "PKTLSB",
+        "FM": "PKTFM",
+        "USB": "PKTUSB",
+        "LSB": "PKTLSB",
     }
-    _DATA_MODE_REVERSE: ClassVar[dict[str, str]] = {
-        v: k for k, v in _DATA_MODE_MAP.items()
-    }
+    _DATA_MODE_REVERSE: ClassVar[dict[str, str]] = {v: k for k, v in _DATA_MODE_MAP.items()}
 
     def _cmd_bbs(self, args: list[str]) -> None:
         """QSY to packet BBS frequency/mode: :bbs on / :bbs off."""
@@ -440,7 +450,8 @@ class TuiSink(PositionSink):
         if not args:
             state = "ON" if self._bbs_active else "OFF"
             self._set_status(
-                f"BBS: {state}  ({bbs_freq:.3f} MHz {bbs_mode})", style="cyan",
+                f"BBS: {state}  ({bbs_freq:.3f} MHz {bbs_mode})",
+                style="cyan",
             )
             return
         action = args[0].lower()
@@ -450,7 +461,7 @@ class TuiSink(PositionSink):
                 try:
                     freq_str = self.rig.get_frequency()
                     self._saved_freq = int(freq_str) if freq_str else None
-                except (ValueError, TypeError):
+                except ValueError, TypeError:
                     self._saved_freq = None
                 self._saved_mode = self.rig.get_mode()
             # QSY (always — allows re-send if radio drifted)
@@ -557,7 +568,8 @@ class TuiSink(PositionSink):
         if not args:
             state = "running" if lnchr.running else "stopped"
             self._set_status(
-                f"Direwolf: {state} — config: {lnchr.active_config}", style="cyan",
+                f"Direwolf: {state} — config: {lnchr.active_config}",
+                style="cyan",
             )
             return
         profile = args[0].lower()
@@ -620,7 +632,7 @@ class TuiSink(PositionSink):
             title += "  [bold white on yellow] IS [/bold white on yellow]"
         if self._wd_tripped:
             title += "  [bold white on red blink] WD [/bold white on red blink]"
-        if getattr(self, '_bbs_active', False):
+        if getattr(self, "_bbs_active", False):
             title += "  [bold white on magenta] BBS [/bold white on magenta]"
         return title
 
@@ -643,7 +655,7 @@ class TuiSink(PositionSink):
                 try:
                     freq_str = self.rig.get_frequency()
                     self._saved_freq = int(freq_str) if freq_str else None
-                except (ValueError, TypeError):
+                except ValueError, TypeError:
                     self._saved_freq = None
                 self._saved_mode = self.rig.get_mode()
             # QSY to APRS frequency + mode (from [aprs] config)
@@ -870,12 +882,14 @@ class TuiSink(PositionSink):
         parts: list = [alert_panel]
         if self.aprs_buffer is not None:
             aprs_text = self.aprs_buffer.render(max_lines=8)
-            parts.append(Panel(
-                aprs_text,
-                title="[bold]APRS-IS[/bold]",
-                border_style="cyan",
-                expand=True,
-            ))
+            parts.append(
+                Panel(
+                    aprs_text,
+                    title="[bold]APRS-IS[/bold]",
+                    border_style="cyan",
+                    expand=True,
+                )
+            )
         alert_title = self._build_title()
         outer = self._build_layout(parts, alert_title, "red")
 
@@ -895,8 +909,7 @@ class TuiSink(PositionSink):
         alert.append("  ⚠  ", style="bold red blink")
         alert.append("TX WATCHDOG TRIPPED\n\n", style="bold red")
         alert.append(
-            f"  Radio was transmitting for {tx_duration:.0f}s "
-            f"(limit {tx_timeout}s)\n",
+            f"  Radio was transmitting for {tx_duration:.0f}s (limit {tx_timeout}s)\n",
             style="bold yellow",
         )
         alert.append("  PTT forced OFF — radio returned to RX\n\n", style="bold green")
@@ -951,9 +964,7 @@ class TuiSink(PositionSink):
                 if clients:
                     t.append(f"  ({clients} pkts)", style="dim")
             elif clients:
-                t.append(
-                    f"  ({len(clients)})" if kind == "tcp" else ""
-                )
+                t.append(f"  ({len(clients)})" if kind == "tcp" else "")
                 for addr in clients:
                     t.append(f"\n  └ {addr}", style="dim")
             return t
@@ -973,9 +984,15 @@ class TuiSink(PositionSink):
             if i < len(right_items) - 1:
                 right.append("\n")
 
-        cols = Columns(
-            [left, right], equal=True, expand=True,
-        ) if right.plain.strip() else left
+        cols = (
+            Columns(
+                [left, right],
+                equal=True,
+                expand=True,
+            )
+            if right.plain.strip()
+            else left
+        )
 
         return Panel(
             cols,
@@ -1080,8 +1097,7 @@ class TuiSink(PositionSink):
             right.append(" No meter data", style="dim")
 
         # Border turns red on TX with high SWR or ALC
-        warn = (ptt is True and
-                (meters.get("SWR", 0) >= 3.0 or meters.get("ALC", 0) >= 0.8))
+        warn = ptt is True and (meters.get("SWR", 0) >= 3.0 or meters.get("ALC", 0) >= 0.8)
         right_panel = Panel(
             right,
             title="[bold]Rig / Meters[/bold]",

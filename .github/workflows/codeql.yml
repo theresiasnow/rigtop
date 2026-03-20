@@ -13,6 +13,8 @@ jobs:
   analyze:
     name: Analyze Python
     runs-on: ubuntu-latest
+    # Non-blocking: requires "Code scanning" enabled in Settings → Code Security
+    continue-on-error: true
 
     permissions:
       security-events: write
