@@ -13,7 +13,9 @@ dependencies = [
     "pydantic>=2.12.5",
     "pynmea2>=1.19.0",
     "pyserial>=3.5",
+    "pywinpty>=2.0; sys_platform == 'win32'",
     "rich>=13.0",
+    "textual>=0.80.0",
 ]
 
 [dependency-groups]

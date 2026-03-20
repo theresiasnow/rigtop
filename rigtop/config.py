@@ -206,11 +206,11 @@ def _parse_rigs(data: dict) -> list[RigConfig]:
 
 
 def _parse_sinks(data: dict) -> list[SinkConfig]:
-    """Parse sink entries, skipping disabled ones."""
+    """Parse all sink entries (including disabled ones)."""
     raw = data.get("sink", [{"type": "tui"}])
     if isinstance(raw, dict):
         raw = [raw]
-    return [s for s in (SinkConfig(**entry) for entry in raw) if s.enabled]
+    return list(SinkConfig(**entry) for entry in raw)
 
 
 def load_config(path: Path | None) -> Config:

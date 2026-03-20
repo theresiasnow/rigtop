@@ -125,8 +125,13 @@ def main():
         cfg.sinks = [SinkConfig(type="console")]
 
     # --- Create sinks early so the TUI log buffer exists before rigctld starts ---
+    # All configured sinks are created (including disabled ones) so toggle commands
+    # can enable them at runtime. Only enabled=True sinks are auto-started later.
     print("[2/8] Creating sinks…")
-    sinks = [create_sink(s.model_dump(exclude_defaults=False)) for s in cfg.sinks]
+    _sink_cfgs = list(cfg.sinks)
+    sinks = [create_sink(s.model_dump(exclude_defaults=False)) for s in _sink_cfgs]
+    # Sinks with enabled=False are created but not auto-started (toggle via command)
+    _disabled_at_start = {id(sinks[i]) for i, s in enumerate(_sink_cfgs) if not s.enabled}
 
     aprs_buf: AprsBuffer | None = None
     msg_buf: MessageBuffer | None = None
@@ -162,9 +167,11 @@ def main():
 
     # --- Auto-start rigctld if configured ---
     launcher: RigctldLauncher | None = None
+    rigctld_buffer: DirewolfBuffer | None = None
 
     if cfg.rigctld is not None:
         print(f"[3/8] Starting rigctld (model {cfg.rigctld.model}, {cfg.rigctld.serial_port})…")
+        rigctld_buffer = DirewolfBuffer()
         launcher = RigctldLauncher(
             model=cfg.rigctld.model,
             serial_port=cfg.rigctld.serial_port,
@@ -181,7 +188,7 @@ def main():
             listen_host=cfg.rig.host,
             listen_port=cfg.rig.port,
             log_level=cfg.log_level.value,
-            stderr_callback=None,
+            stderr_callback=rigctld_buffer.push,
         )
         try:
             launcher.start()
@@ -225,9 +232,10 @@ def main():
             sink.rig = rig
             sink.rig_name = cfg.rig.name
             sink.aprs_config = cfg.aprs
-            sink.bbs_config = cfg.bbs
+            sink.packet_config = cfg.bbs
             sink.dw_launcher = dw_launcher
             sink.dw_buffer = dw_buffer
+            sink.rigctld_buffer = rigctld_buffer
             break
     # Wire CI-V proxy sinks to rigctld for write commands
     for sink in sinks:
@@ -277,6 +285,9 @@ def main():
     if dw_client is not None:
         dw_client.start()
     for sink in sinks:
+        if id(sink) in _disabled_at_start:
+            logger.info("Sink {} disabled at startup (toggle with command)", sink)
+            continue
         try:
             sink.start()
         except Exception as e:
@@ -294,10 +305,34 @@ def main():
 
     # --- Run ---
     print("Ready ✓")
+    tui_sink = next((s for s in sinks if getattr(s, "tui", False)), None)
     try:
-        run(rig, sinks, interval=cfg.interval, once=cfg.once, meters=cfg.meters,
-            gps_fallback=gps_fallback, watchdog=cfg.watchdog,
-            static_pos=static_pos)
+        if tui_sink is not None:
+            from rigtop.sinks.tui import RigtopApp
+            app = RigtopApp(
+                rig=rig,
+                sinks=sinks,
+                dw_launcher=dw_launcher,
+                dw_client=dw_client,
+                dw_buffer=dw_buffer,
+                rigctld_buffer=rigctld_buffer,
+                aprs_buffer=aprs_buf,
+                msg_buffer=msg_buf,
+                aprs_config=cfg.aprs,
+                packet_config=cfg.bbs,
+                rig_name=cfg.rig.name,
+                interval=cfg.interval,
+                meters=cfg.meters,
+                gps_fallback=gps_fallback,
+                static_pos=static_pos,
+                watchdog=cfg.watchdog,
+                beacon_disabled=beacon_disabled,
+            )
+            app.run()
+        else:
+            run(rig, sinks, interval=cfg.interval, once=cfg.once, meters=cfg.meters,
+                gps_fallback=gps_fallback, watchdog=cfg.watchdog,
+                static_pos=static_pos)
     except KeyboardInterrupt:
         pass
     finally:

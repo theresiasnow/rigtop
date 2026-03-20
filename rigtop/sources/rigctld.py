@@ -187,6 +187,13 @@ class RigctldSource(GpsSource):
                 continue
         return None
 
+    def get_strength(self) -> float | None:
+        """Read signal strength, trying STRENGTH then RAWSTR (hamlib alias)."""
+        val = self.get_level("STRENGTH")
+        if val is None:
+            val = self.get_level("RAWSTR")
+        return val
+
     def get_meters(self, levels: list[str] | None = None) -> dict[str, float]:
         """Read multiple rig levels. Returns {name: value} for successful reads."""
         if levels is None:
