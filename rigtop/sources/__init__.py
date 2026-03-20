@@ -57,9 +57,7 @@ def create_source(config: dict[str, Any]) -> GpsSource:
     cls = _SOURCE_TYPES.get(source_type)
     if cls is None:
         available = ", ".join(sorted(_SOURCE_TYPES))
-        raise ValueError(
-            f"Unknown source type '{source_type}'. Available: {available}"
-        )
+        raise ValueError(f"Unknown source type '{source_type}'. Available: {available}")
     # Pass remaining config as kwargs
     kwargs = {k: v for k, v in config.items() if k != "type"}
     return cls(**kwargs)

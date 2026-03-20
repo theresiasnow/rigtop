@@ -1,11 +1,13 @@
-"""APRS-IS position beacon sink.
+"""APRS-IS position beacon sink with messaging.
 
 Connects to an APRS-IS Tier 2 server and beacons live GPS positions.
 Incoming APRS-IS traffic is logged so it appears in the TUI log pane.
+Supports APRS message send/receive with acknowledgement.
 """
 
 from __future__ import annotations
 
+import re
 import socket
 import threading
 import time
@@ -15,6 +17,12 @@ from loguru import logger
 
 from rigtop.sinks import PositionSink, register_sink
 from rigtop.sources import Position
+
+# APRS message format:  SENDER>PATH::DEST     :text{msgno}
+# Dest callsign is padded to 9 characters with spaces.
+_MSG_RE = re.compile(r"^(?P<sender>[^>]+)>[^:]*::(?P<dest>.{9}):(?P<body>.*)$")
+_ACK_RE = re.compile(r"^ack(?P<msgno>\w+)$")
+_REJ_RE = re.compile(r"^rej(?P<msgno>\w+)$")
 
 
 def _format_lat(lat: float) -> str:
@@ -69,10 +77,18 @@ class AprsIsSink(PositionSink):
         self._stop_event = threading.Event()
         self._beacon_enabled = True
         self._last_beacon = 0.0
-        self._last_rx: float = 0.0    # monotonic time of last received packet
-        self._rx_count: int = 0       # total received packets
+        self._last_rx: float = 0.0  # monotonic time of last received packet
+        self._rx_count: int = 0  # total received packets
         self._lock = threading.Lock()
         self.aprs_buffer = None  # set by main.py to share with TUI
+        self.msg_buffer = None  # MessageBuffer, set by cli.py
+
+        # Messaging state
+        self._msg_seq = 0  # outgoing message sequence number
+        self._pending_acks: dict[str, tuple[str, str, int, float]] = {}
+        # {msgno: (dest, text, retries_left, next_retry_time)}
+        self._retry_interval = 30.0
+        self._max_retries = 5
 
         if not self._callsign:
             raise ValueError("aprsis: callsign required")
@@ -136,7 +152,7 @@ class AprsIsSink(PositionSink):
                 self._connected = False
 
     def _receiver_loop(self) -> None:
-        """Read incoming APRS-IS packets and log them."""
+        """Read incoming APRS-IS packets, parse messages, log traffic."""
         buf = ""
         while not self._stop_event.is_set():
             with self._lock:
@@ -158,6 +174,7 @@ class AprsIsSink(PositionSink):
                     self._rx_count += 1
                     if self.aprs_buffer is not None:
                         self.aprs_buffer.push(line)
+                    self._handle_message(line)
                     logger.info("APRS-IS: {}", line)
             except TimeoutError:
                 continue
@@ -165,8 +182,125 @@ class AprsIsSink(PositionSink):
                 if not self._stop_event.is_set():
                     self._stop_event.wait(5)
 
+    def _handle_message(self, line: str) -> None:
+        """Check if line is an APRS message addressed to us, or an ack."""
+        m = _MSG_RE.match(line)
+        if not m:
+            return
+        sender = m.group("sender").strip()
+        dest = m.group("dest").strip()
+        body = m.group("body")
+
+        my_call = self._callsign.upper().split("-")[0]
+        # Also match with SSID
+        dest_upper = dest.upper()
+        if dest_upper != my_call and dest_upper != self._callsign.upper():
+            return
+
+        # Check if it's an ack/rej for a message we sent
+        ack_m = _ACK_RE.match(body)
+        if ack_m:
+            msgno = ack_m.group("msgno")
+            if msgno in self._pending_acks:
+                del self._pending_acks[msgno]
+                logger.info("APRS msg ack received: {}", msgno)
+                if self.msg_buffer is not None:
+                    self.msg_buffer.mark_ack(msgno)
+            return
+
+        rej_m = _REJ_RE.match(body)
+        if rej_m:
+            msgno = rej_m.group("msgno")
+            self._pending_acks.pop(msgno, None)
+            logger.info("APRS msg rejected: {}", msgno)
+            return
+
+        # It's a regular message to us — extract text and msgno
+        msgno = ""
+        text = body
+        if "{" in body:
+            text, msgno = body.rsplit("{", 1)
+            msgno = msgno.rstrip("}")
+
+        logger.info("APRS msg from {}: {} (msgno={})", sender, text, msgno)
+        if self.msg_buffer is not None:
+            self.msg_buffer.push_rx(sender, text, msgno)
+
+        # Send ack if msgno present
+        if msgno:
+            self._send_ack(sender, msgno)
+
+    def _send_ack(self, dest: str, msgno: str) -> None:
+        """Send an ack packet for a received message."""
+        dest_padded = f"{dest:<9}"
+        packet = f"{self._callsign}>APRS,TCPIP*::{dest_padded}:ack{msgno}\r\n"
+        with self._lock:
+            sock = self._sock
+        if sock is None:
+            return
+        try:
+            sock.sendall(packet.encode("ascii"))
+            logger.debug("APRS ack sent: {}", packet.strip())
+        except OSError as e:
+            logger.warning("APRS ack send failed: {}", e)
+
+    def send_message(self, dest: str, text: str) -> str | None:
+        """Send an APRS message to dest callsign. Returns msgno."""
+        with self._lock:
+            sock = self._sock
+            connected = self._connected
+        if not connected or sock is None:
+            return None
+
+        self._msg_seq = (self._msg_seq + 1) % 100000
+        msgno = str(self._msg_seq)
+        dest_padded = f"{dest.upper():<9}"
+        packet = f"{self._callsign}>APRS,TCPIP*::{dest_padded}:{text}{{{msgno}\r\n"
+        try:
+            sock.sendall(packet.encode("ascii"))
+            logger.info("APRS msg sent to {}: {} {{{}}}", dest, text, msgno)
+            # Track for ack
+            self._pending_acks[msgno] = (
+                dest,
+                text,
+                self._max_retries,
+                time.monotonic() + self._retry_interval,
+            )
+            if self.msg_buffer is not None:
+                self.msg_buffer.push_tx(dest.upper(), text, msgno)
+            return msgno
+        except OSError as e:
+            logger.warning("APRS msg send failed: {}", e)
+            return None
+
+    def _retry_pending(self) -> None:
+        """Resend unacknowledged messages (called from keepalive loop)."""
+        now = time.monotonic()
+        expired = []
+        for msgno, (dest, text, retries, next_t) in list(self._pending_acks.items()):
+            if now < next_t:
+                continue
+            if retries <= 0:
+                expired.append(msgno)
+                continue
+            dest_padded = f"{dest:<9}"
+            packet = f"{self._callsign}>APRS,TCPIP*::{dest_padded}:{text}{{{msgno}\r\n"
+            with self._lock:
+                sock = self._sock
+            if sock is None:
+                break
+            try:
+                sock.sendall(packet.encode("ascii"))
+                logger.debug("APRS msg retry to {} msgno={}", dest, msgno)
+                self._pending_acks[msgno] = (dest, text, retries - 1, now + self._retry_interval)
+            except OSError:
+                break
+        for msgno in expired:
+            del self._pending_acks[msgno]
+            logger.warning("APRS msg {} gave up after retries", msgno)
+
     def _keepalive_loop(self) -> None:
-        """Send keepalive comments and handle reconnects."""
+        """Send keepalive comments, retry messages, and handle reconnects."""
         while not self._stop_event.wait(60):
             with self._lock:
                 sock = self._sock
@@ -175,6 +309,7 @@ class AprsIsSink(PositionSink):
                 continue
             try:
                 sock.sendall(b"#keepalive\r\n")
+                self._retry_pending()
             except OSError:
                 logger.warning("APRS-IS keepalive failed, reconnecting")
                 with self._lock:

@@ -1,0 +1,47 @@
+name: Copilot Code Review
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+
+# Only run on PRs targeting main from non-draft PRs
+jobs:
+  request-review:
+    name: Request Copilot review
+    runs-on: ubuntu-latest
+    if: >
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.base.ref == 'main'
+
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Request Copilot as reviewer
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const { owner, repo } = context.repo;
+
+            // Request Copilot pull request reviewer
+            try {
+              await github.rest.pulls.requestReviewers({
+                owner,
+                repo,
+                pull_number: pr.number,
+                reviewers: ['copilot-pull-request-reviewer'],
+              });
+              console.log('Copilot reviewer requested via API');
+            } catch (apiErr) {
+              // Fall back to triggering via comment if API reviewer request fails
+              // (Copilot must be enabled in repo Settings → Code Security)
+              console.log('API reviewer request failed, falling back to comment trigger:', apiErr.message);
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pr.number,
+                body: '@github-copilot review',
+              });
+              console.log('Copilot review triggered via comment');
+            }

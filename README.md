@@ -125,19 +125,21 @@ QSY rig to the APRS frequency and mode on startup. Optional.
 
 ```toml
 [aprs]
-qsy_freq = 144.800   # MHz (EU: 144.800, NA: 144.390)
+freq = 144.800        # MHz (EU: 144.800, NA: 144.390)
 qsy_mode = "FM"
 ```
 
-### Direwolf KISS TCP
+### Direwolf
 
 Receive local RF APRS decodes from Direwolf. Packets decoded by your radio appear
-in the APRS pane in yellow. Optional — remove this section if you don’t run Direwolf.
+in the APRS pane in yellow. Optional — remove this section if you don't run Direwolf.
+Set `install_path` to let rigtop start/stop Direwolf on demand (:aprs on / :bbs on).
 
 ```toml
 [direwolf]
 host = "127.0.0.1"
 port = 8001           # Direwolf KISS TCP port
+install_path = "c:\\direwolf"  # set to enable launcher
 ```
 
 ### TX watchdog
@@ -241,8 +243,13 @@ The TUI uses a vim-style command interface. Press `:` to enter command mode.
 |---------|-----------|-------------|
 | `:freq` | `[Hz\|MHz]` | Show or set rig frequency. Values < 1 MHz are treated as MHz. |
 | `:mode` | `[MODE [passband]]` | Show or set rig mode (FM, USB, LSB, CW, AM, …) |
+| `:data` | `[on\|off]` | Toggle data mode (e.g. USB → PKTUSB, FM → PKTFM) |
 | `:aprs` | `[on\|off]` | Show status or toggle all APRS sinks (NMEA + APRS-IS) |
 | `:igate` | `[on\|off]` | Show status or toggle APRS-IS gateway only |
+| `:bbs` | `[on\|off]` | QSY to packet BBS frequency/mode and start Direwolf |
+| `:dw` | `[aprs\|bbs]` | Show Direwolf status or switch config profile |
+| `:msg` | `CALL text` | Send an APRS message via APRS-IS |
+| `:scan` | | Scan LAN for radio services (rigctld, etc.) |
 | `:info` | | Show rig connection info, frequency, mode, grid |
 | `:help` | | Show command list |
 | `:q` / `:quit` | | Exit rigtop |
@@ -356,7 +363,7 @@ Create two VSPD pairs:
 
 ```toml
 [aprs]
-qsy_freq = 144.800
+freq = 144.800
 qsy_mode = "FM"
 
 [[sink]]
