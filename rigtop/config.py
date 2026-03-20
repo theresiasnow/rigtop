@@ -98,15 +98,25 @@ class WatchdogConfig(BaseModel):
 
 
 class DirewolfConfig(BaseModel):
-    """Direwolf KISS TCP — receive local RF APRS decodes."""
+    """Direwolf KISS TCP + optional launcher."""
     host: str = "127.0.0.1"
     port: int = Field(default=8001, ge=1, le=65535)
+    install_path: str | None = None   # set to enable launcher
+    extra_args: list[str] = Field(default_factory=list)
+
+
+class BbsConfig(BaseModel):
+    """Packet BBS settings — frequency/mode for :bbs command."""
+    enabled: bool = False
+    freq: float = 144.675     # packet frequency in MHz
+    mode: str = "PKTFM"       # rig mode (PKTFM for 1200 baud, PKTUSB for 9600)
 
 
 class AprsConfig(BaseModel):
-    """APRS settings — QSY frequency/mode applied on startup."""
-    qsy_freq: float = 0       # QSY rig to this freq (MHz) on start
-    qsy_mode: str = ""         # set rig mode on start (e.g. FM, USB)
+    """APRS settings — QSY frequency/mode for :aprs on."""
+    enabled: bool = False
+    freq: float = 0            # QSY rig to this freq (MHz)
+    qsy_mode: str = ""         # rig mode (e.g. FM, USB)
 
 
 class SinkConfig(BaseModel):
@@ -145,7 +155,7 @@ class Config(BaseModel):
 
     model_config = {"validate_assignment": True}
 
-    interval: float = Field(default=2.0, gt=0)
+    interval: float = Field(default=0.5, gt=0)
     once: bool = False
     meters: bool = True
     log_level: LogLevel = LogLevel.WARNING
@@ -155,6 +165,7 @@ class Config(BaseModel):
     gps_fallback: GpsConfig | None = None
     gps_static: GpsStaticConfig | None = None
     aprs: AprsConfig | None = None
+    bbs: BbsConfig | None = None
     direwolf: DirewolfConfig | None = None
     watchdog: WatchdogConfig | None = None
     sinks: list[SinkConfig] = Field(default_factory=lambda: [SinkConfig(type="tui")])
@@ -222,7 +233,9 @@ def load_config(path: Path | None) -> Config:
     rigs = _parse_rigs(data)
     rigctld_raw = data.get("rigctld")
     gps_raw = data.get("gps_fallback")
+    gps_static_raw = data.get("gps_static")
     aprs_raw = data.get("aprs")
+    bbs_raw = data.get("bbs")
     direwolf_raw = data.get("direwolf")
     watchdog_raw = data.get("watchdog")
     sinks = _parse_sinks(data)
@@ -235,7 +248,9 @@ def load_config(path: Path | None) -> Config:
         rigs=rigs,
         rigctld=RigctldConfig(**rigctld_raw) if rigctld_raw else None,
         gps_fallback=GpsConfig(**gps_raw) if gps_raw else None,
+        gps_static=GpsStaticConfig(**gps_static_raw) if gps_static_raw else None,
         aprs=AprsConfig(**aprs_raw) if aprs_raw else None,
+        bbs=BbsConfig(**bbs_raw) if bbs_raw else None,
         direwolf=DirewolfConfig(**direwolf_raw) if direwolf_raw else None,
         watchdog=WatchdogConfig(**watchdog_raw) if watchdog_raw else None,
         sinks=sinks,

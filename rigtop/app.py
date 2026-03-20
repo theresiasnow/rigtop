@@ -213,11 +213,14 @@ def run(
                     else:
                         pass  # reset handled above in PTT transition logic
                 if meters:
-                    m = rig.get_meters()
-                    # Also grab TX power setting (0-1)
-                    rfpower = rig.get_level("RFPOWER")
-                    if rfpower is not None:
-                        m["RFPOWER"] = rfpower
+                    # Only poll relevant meters for current PTT state
+                    if ptt:
+                        m = rig.get_meters(levels=["ALC", "SWR", "RFPOWER_METER", "COMP_METER"])
+                        rfpower = rig.get_level("RFPOWER")
+                        if rfpower is not None:
+                            m["RFPOWER"] = rfpower
+                    else:
+                        m = rig.get_meters(levels=["STRENGTH"])
                     extras["meters"] = m
 
                 # Print summary (non-TUI only)

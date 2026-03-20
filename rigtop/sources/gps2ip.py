@@ -43,7 +43,7 @@ class Gps2ipSource(GpsSource):
             if not data:
                 raise ConnectionError("GPS2IP connection closed")
             self._buffer += data.decode("ascii", errors="ignore")
-        except TimeoutError:
+        except (TimeoutError, ConnectionResetError):
             pass
 
         sentences = []

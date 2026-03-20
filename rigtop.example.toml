@@ -47,10 +47,12 @@ port = 11123            # GPS2IP TCP port
 # alt = 28.0             # altitude in metres (optional)
 
 # --- APRS ---
-# QSY rig to APRS frequency on startup.
+# QSY rig to APRS frequency when :aprs on is used.
+# Set enabled = true to also QSY on startup.
 # Remove this section if you don't use APRS.
 # [aprs]
-# qsy_freq = 144.800   # MHz (EU: 144.800, NA: 144.390)
+# enabled = false       # true = QSY on startup; false = only on :aprs on
+# freq = 144.800        # MHz (EU: 144.800, NA: 144.390)
 # qsy_mode = "FM"
 
 # --- TX Watchdog ---
@@ -60,13 +62,24 @@ port = 11123            # GPS2IP TCP port
 [watchdog]
 tx_timeout = 120       # seconds (minimum 10)
 
-# --- Direwolf KISS TCP ---
+# --- Direwolf KISS TCP + optional launcher ---
 # Receive local RF APRS decodes from Direwolf.
 # Decoded packets appear in the APRS pane in yellow.
+# Set install_path to let rigtop start/stop Direwolf on demand.
+# Config file is chosen automatically: direwolf-aprs.conf / direwolf-bbs.conf.
 # Remove this section if you don't run Direwolf.
 # [direwolf]
 # host = "127.0.0.1"
 # port = 8001           # Direwolf KISS TCP port
+# install_path = "c:\\direwolf"  # set to enable launcher
+
+# --- Packet BBS ---
+# Quick QSY to packet BBS frequency via :bbs on / :bbs off in the TUI.
+# Saves and restores previous freq/mode automatically.
+# [bbs]
+# enabled = false       # true = QSY on startup; false = only on :bbs on
+# freq = 144.675        # packet frequency in MHz (SM: 144.675, EU common: 144.625)
+# mode = "PKTFM"        # rig mode (PKTFM = 1200 baud FM, PKTUSB = 9600 baud USB)
 
 # --- Sinks ---
 # Use [[sink]] (double brackets) for each sink. Multiple sinks run simultaneously.
