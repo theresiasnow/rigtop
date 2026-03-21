@@ -15,6 +15,7 @@ from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
+from textual.message import Message
 from textual.reactive import reactive
 from textual.suggester import Suggester
 from textual.widget import Widget
@@ -392,9 +393,17 @@ class RigCommandPanel(Widget):
         "PKTLSB",
     ]
     _ATT_STEPS: ClassVar[list[int]] = [0, 6, 12, 18]
-    _PRE_STEPS: ClassVar[list[int]] = [0, 10, 20]
+    _PRE_STEPS: ClassVar[list[int]] = [0, 1]  # off / on — hamlib uses index (0=off, 1=preamp 1)
     _DATA_ON: ClassVar[dict[str, str]] = {"FM": "PKTFM", "USB": "PKTUSB", "LSB": "PKTLSB"}
     _DATA_OFF: ClassVar[dict[str, str]] = {"PKTFM": "FM", "PKTUSB": "USB", "PKTLSB": "LSB"}
+
+    class ControlChanged(Message):
+        """Posted when a level or function is changed via a panel button."""
+
+        def __init__(self, key: str, value: float) -> None:
+            super().__init__()
+            self.key = key
+            self.value = value
 
     def __init__(self, rig, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -408,12 +417,12 @@ class RigCommandPanel(Widget):
         self._updating = False
 
     def compose(self) -> ComposeResult:
+        yield Select([(m, m) for m in self._MODES], id="mode-sel")
         yield Button("◄◄", id="step-m10k", classes="step")
         yield Button("◄", id="step-m1k", classes="step")
         yield Label("—", id="freq-lbl")
         yield Button("►", id="step-p1k", classes="step")
         yield Button("►►", id="step-p10k", classes="step")
-        yield Select([(m, m) for m in self._MODES], id="mode-sel")
         yield Button("ATT: off", id="att-btn", classes="cycle")
         yield Button("Pre: off", id="pre-btn", classes="cycle")
         yield Button("NB: off", id="nb-btn", classes="cycle")
@@ -470,10 +479,9 @@ class RigCommandPanel(Widget):
 
         pre_raw = controls.get("PREAMP")
         if pre_raw is not None:
-            self._pre_idx = min(
-                range(len(self._PRE_STEPS)),
-                key=lambda i: abs(self._PRE_STEPS[i] - pre_raw),
-            )
+            # Treat any non-zero value as "on" — rigs may return a dB value (10)
+            # or an index (1), but both are > 0 when the preamp is active.
+            self._pre_idx = 0 if not pre_raw else 1
             try:
                 self.query_one("#pre-btn", Button).label = self._pre_label()
             except Exception:
@@ -500,8 +508,7 @@ class RigCommandPanel(Widget):
         return f"ATT: {v} dB" if v else "ATT: off"
 
     def _pre_label(self) -> str:
-        v = self._PRE_STEPS[self._pre_idx]
-        return f"Pre: {v} dB" if v else "Pre: off"
+        return "Pre: on" if self._pre_idx else "Pre: off"
 
     def _nb_label(self) -> str:
         return "NB: on" if self._nb_on else "NB: off"
@@ -525,22 +532,46 @@ class RigCommandPanel(Widget):
             self._rig.set_freq(self._freq_hz + step_map[btn_id])
         elif btn_id == "att-btn":
             self._att_idx = (self._att_idx + 1) % len(self._ATT_STEPS)
-            if self._rig.set_level("ATT", float(self._ATT_STEPS[self._att_idx])):
+            val = float(self._ATT_STEPS[self._att_idx])
+            if self._rig.set_level("ATT", val):
+                # Read back to confirm and get the actual ATT value
+                actual = self._rig.get_level("ATT")
+                if actual is not None:
+                    self._att_idx = min(
+                        range(len(self._ATT_STEPS)),
+                        key=lambda i: abs(self._ATT_STEPS[i] - actual),
+                    )
+                    val = actual
                 self.query_one("#att-btn", Button).label = self._att_label()
+                self.post_message(self.ControlChanged("ATT", val))
+            else:
+                self._att_idx = (self._att_idx - 1) % len(self._ATT_STEPS)  # revert
+                self.notify("ATT: not settable via hamlib for this rig", severity="warning")
         elif btn_id == "pre-btn":
             self._pre_idx = (self._pre_idx + 1) % len(self._PRE_STEPS)
-            if self._rig.set_level("PREAMP", float(self._PRE_STEPS[self._pre_idx])):
+            val = float(self._PRE_STEPS[self._pre_idx])
+            if self._rig.set_level("PREAMP", val):
+                # Read back to verify the rig actually accepted the change
+                actual = self._rig.get_level("PREAMP")
+                if actual is not None:
+                    self._pre_idx = 0 if not actual else 1
+                    val = actual
                 self.query_one("#pre-btn", Button).label = self._pre_label()
+                self.post_message(self.ControlChanged("PREAMP", val))
+            else:
+                self._pre_idx = (self._pre_idx - 1) % len(self._PRE_STEPS)  # revert
         elif btn_id == "nb-btn":
             self._nb_on = not self._nb_on
             if self._rig.set_func("NB", self._nb_on):
                 self.query_one("#nb-btn", Button).label = self._nb_label()
+                self.post_message(self.ControlChanged("NB", float(self._nb_on)))
             else:
                 self._nb_on = not self._nb_on  # revert on failure
         elif btn_id == "nr-btn":
             self._nr_on = not self._nr_on
             if self._rig.set_func("NR", self._nr_on):
                 self.query_one("#nr-btn", Button).label = self._nr_label()
+                self.post_message(self.ControlChanged("NR", float(self._nr_on)))
             else:
                 self._nr_on = not self._nr_on  # revert on failure
         elif btn_id == "data-btn":
@@ -1143,6 +1174,10 @@ class RigtopApp(App[None]):
         self._start_poll()
         self._start_conn_refresh()
         self.query_one("#cmd-input", Input).focus()
+
+    def on_rig_command_panel_control_changed(self, msg: RigCommandPanel.ControlChanged) -> None:
+        """Keep _last_controls in sync when a panel button changes a level/func."""
+        self._last_controls[msg.key] = msg.value
 
     def _wire_dw_log(self) -> None:
         """Forward new DirewolfBuffer pushes to the RichLog widget."""
