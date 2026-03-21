@@ -400,6 +400,7 @@ class StationPanel(Static):
         gps_src: str,
         start_time: float,
         location: dict | None = None,
+        beacon_enabled: bool | None = None,
     ) -> None:
         txt = Text()
         if pos is None:
@@ -425,6 +426,12 @@ class StationPanel(Static):
                 txt.append(f"{pos.alt:.0f} m\n", style="bold")
         txt.append(" GPS   ", style="dim")
         txt.append(f"{gps_src}\n", style="bold" if gps_src == "rig" else "yellow")
+        if beacon_enabled is not None:
+            txt.append(" Beacon ", style="dim")
+            if beacon_enabled:
+                txt.append("● ON\n", style="bold green")
+            else:
+                txt.append("○ OFF\n", style="dim red")
         # Uptime
         uptime_s = int(_time.monotonic() - start_time)
         h, rem = divmod(uptime_s, 3600)
@@ -888,8 +895,10 @@ class RigtopApp(App[None]):
         self.query_one(RigPanel).render_data(
             freq, mode, passband, ptt, meters, self._rig_name, self._wd_tripped,
         )
+        aprsis_sinks = [s for s in self._sinks if type(s).__name__ == "AprsIsSink"]
+        beacon_enabled = aprsis_sinks[0]._beacon_enabled if aprsis_sinks else None
         self.query_one(StationPanel).render_data(
-            pos, grid, gps_src, self._start_time, location,
+            pos, grid, gps_src, self._start_time, location, beacon_enabled,
         )
 
         # Update traffic / messages panes when APRS or packet mode is active
