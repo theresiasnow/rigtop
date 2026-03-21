@@ -10,8 +10,13 @@ from __future__ import annotations
 try:
     import reverse_geocoder as _rg  # type: ignore[import-untyped]
 
+    # Pre-initialize the KD-tree in the importing thread so that background
+    # threads (e.g. Textual worker) never need to spawn a subprocess.
+    # Without this, scipy's multiprocessing spawn can fail on Windows when
+    # called from a non-main thread (DLL load / paging-file errors).
+    _rg.search([(0.0, 0.0)], verbose=False)
     _HAS_RG = True
-except ImportError:
+except Exception:
     _HAS_RG = False
 
 # ISO 3166-1 alpha-2 → (cq_zone, iaru_zone)
