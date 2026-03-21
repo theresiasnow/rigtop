@@ -61,8 +61,9 @@ jobs:
         run: |
           uv run python -c "
           import rigtop
+          print(f'rigtop {rigtop.__version__}')
           from rigtop.config import load_config, Config
-          from rigtop.sinks.tui import TuiSink
+          from rigtop.sinks.tui import RigtopApp
           from rigtop.sources.rigctld import RigctldSource
           from rigtop.geo import maidenhead
           from rigtop.zones import lookup as zone_lookup
@@ -71,8 +72,11 @@ jobs:
           print(f'Default config: rig={c.rig.host}:{c.rig.port}  sinks={[s.type for s in c.sinks]}')
           "
 
+      - name: CLI --version
+        run: uv run rigtop --version
+
       - name: CLI --help
-        run: uv run python -m rigtop --help
+        run: uv run rigtop --help
 
   test:
     name: Tests (Python ${{ matrix.python }}, ${{ matrix.os }})
