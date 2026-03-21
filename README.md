@@ -126,7 +126,7 @@ QSY rig to the APRS frequency and mode when `:aprs on` is used. Optional.
 
 ```toml
 [aprs]
-enabled = false       # true = QSY on startup; false = only on :aprs on
+enabled = false       # QSY only happens on :aprs on
 freq = 144.800        # MHz (EU: 144.800, NA: 144.390)
 qsy_mode = "FM"
 ```
