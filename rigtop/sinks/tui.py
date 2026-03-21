@@ -936,7 +936,7 @@ class RigtopApp(App[None]):
     }
     RigCommandPanel .cmd-extra {
         height: 1;
-        align: left middle;
+        align: right middle;
     }
     RigCommandPanel Button {
         height: 1;
