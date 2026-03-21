@@ -50,11 +50,11 @@ class AprsBuffer:
         src = source if source else self._classify(line)
         self._lines.append((src, f"{ts}  {line}"))
 
-    def render(self, max_lines: int = 8) -> Text:
+    def render(self, max_lines: int = 8, empty_text: str = "(no traffic)") -> Text:
         tail = list(self._lines)[-max_lines:]
         txt = Text()
         if not tail:
-            txt.append(" (no APRS traffic)", style="dim")
+            txt.append(f" {empty_text}", style="dim")
             return txt
         for i, (source, line) in enumerate(tail):
             style = "yellow" if source == "rf-local" else ("green" if source == "rf" else "cyan")
@@ -315,12 +315,14 @@ class AprsPanel(Static):
 
     def render_data(self, buf: AprsBuffer | None, title: str = "RF Traffic") -> None:
         self.border_title = title
+        is_aprs = "APRS" in title
+        empty = "(no APRS traffic)" if is_aprs else "(no packets received)"
         if buf is None:
             txt = Text()
-            txt.append(" No packets yet", style="dim")
+            txt.append(f" {empty}", style="dim")
             self.update(txt)
         else:
-            self.update(buf.render(max_lines=8))
+            self.update(buf.render(max_lines=8, empty_text=empty))
 
 
 class MsgPanel(Static):
