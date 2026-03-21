@@ -495,13 +495,13 @@ class WaterfallPanel(Static):
         self.border_title = "Waterfall"
 
     def on_mount(self) -> None:
-        self._render()
+        self._redraw()
 
     def push(self, strength: float | None) -> None:
         self._history.appendleft(strength)
-        self._render()
+        self._redraw()
 
-    def _render(self) -> None:
+    def _redraw(self) -> None:
         rows = list(self._history)
         while len(rows) < self._ROWS:
             rows.append(None)
