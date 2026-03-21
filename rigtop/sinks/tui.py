@@ -281,7 +281,7 @@ def _control_bar(label: str, value: float, width: int = 16, selected: bool = Fal
     norm = max(0.0, min(1.0, value))
     filled = int(norm * width)
     bar = "█" * filled + "░" * (width - filled)
-    pct = f"{value * 100:.0f}%"
+    pct = f"{norm * 100:.0f}%"
     line = Text()
     arrow = "▶ " if selected else "  "
     line.append(f" {arrow}{label:<5}", style="bold cyan" if selected else "bold")
@@ -431,8 +431,10 @@ class RigCommandPanel(Widget):
                 self._freq_hz = int(float(freq))
                 mhz = f"{self._freq_hz / 1e6:.6f} MHz"
             except ValueError, TypeError:
+                self._freq_hz = None
                 mhz = "—"
         else:
+            self._freq_hz = None
             mhz = "—"
         try:
             self.query_one("#freq-lbl", Label).update(mhz)
@@ -602,7 +604,7 @@ class WaterfallPanel(Static):
                     txt.append(" ")
                     continue
                 norm = max(0.0, min(1.0, (val + 54) / 114))
-                total_sub = max(1, int(norm * height * 8))  # always at least 1 sub-block
+                total_sub = int(norm * height * 8)
                 sub_in_row = max(0, min(8, total_sub - rbf * 8))
                 char = self._VBLOCKS[sub_in_row]
                 # Classic equalizer gradient: green base → yellow mid → red peak
@@ -1786,7 +1788,7 @@ class RigtopApp(App[None]):
         self._set_pct_level("AF", "Vol", args)
 
     def _cmd_rf(self, args: list[str]) -> None:
-        self._set_pct_level("RF", "RF gain", args)
+        self._set_pct_level("RF", "RF", args)
 
     def _cmd_sql(self, args: list[str]) -> None:
         self._set_pct_level("SQL", "SQL", args)
