@@ -513,12 +513,11 @@ class CivProxySink(PositionSink):
     def connections(self) -> list[dict]:
         is_open = self._serial is not None and self._serial.is_open
         return [{
-            "label": f"civ   {self.device}",
+            "label": "CI-V proxy",
             "kind": "serial",
             "status": "open" if is_open else "closed",
+            "address": self.device,
             "clients": [
-                f"{self.baudrate} baud",
-                f"rig 0x{self.rig_addr:02X}",
-                f"rx:{self._rx_frames} tx:{self._tx_frames}",
+                f"rig 0x{self.rig_addr:02X}  rx:{self._rx_frames} tx:{self._tx_frames}",
             ] if is_open else [],
         }]

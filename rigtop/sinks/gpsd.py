@@ -213,8 +213,9 @@ class GpsdSink(PositionSink):
                 f"{c.addr[0]}:{c.addr[1]}" for c in self._clients
             ]
         return [{
-            "label": f"gpsd  {self.host}:{self.port}",
+            "label": "gpsd",
             "kind": "tcp",
             "status": "listening" if self._server else "closed",
+            "address": f"{self.host}:{self.port}",
             "clients": client_addrs,
         }]

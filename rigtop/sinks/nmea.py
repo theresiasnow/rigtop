@@ -180,9 +180,10 @@ class NmeaSink(PositionSink):
         if self._is_serial:
             is_open = self._serial is not None and self._serial.is_open
             return [{
-                "label": f"nmea  {self.device}",
+                "label": "nmea",
                 "kind": "serial",
                 "status": "open" if is_open else "closed",
+                "address": self.device,
                 "clients": [f"{self.baudrate} baud"] if is_open else [],
             }]
         with self._lock:
@@ -194,8 +195,9 @@ class NmeaSink(PositionSink):
                 except OSError:
                     pass
         return [{
-            "label": f"nmea  {self.host}:{self.port}",
+            "label": "nmea",
             "kind": "tcp",
             "status": "listening" if self._server else "closed",
+            "address": f"{self.host}:{self.port}",
             "clients": client_addrs,
         }]

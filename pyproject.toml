@@ -16,6 +16,7 @@ dependencies = [
     "pywinpty>=2.0; sys_platform == 'win32'",
     "rich>=13.0",
     "textual>=0.80.0",
+    "reverse_geocoder>=1.5.1",
 ]
 
 [dependency-groups]

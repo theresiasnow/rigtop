@@ -399,9 +399,10 @@ class AprsIsSink(PositionSink):
             status = "closed"
         return [
             {
-                "label": f"APRS-IS {self._server}:{self._port}",
+                "label": "APRS-IS",
                 "kind": "tcp",
                 "status": status,
+                "address": f"{self._server}:{self._port}",
                 "clients": self._rx_count,
             }
         ]

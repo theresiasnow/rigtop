@@ -23,6 +23,7 @@ from textual.worker import get_current_worker
 from rigtop.geo import format_position, maidenhead
 from rigtop.sinks import PositionSink, register_sink
 from rigtop.sources import Position
+from rigtop.zones import lookup as _zone_lookup
 
 # ── APRS / message buffer classes (used by aprsis sink + cli.py) ───────────
 
@@ -359,7 +360,7 @@ class RigPanel(Static):
 
 
 class StationPanel(Static):
-    """Right top pane: GPS position, grid, altitude, uptime."""
+    """Right top pane: GPS position, grid, zones, country, altitude, uptime."""
 
     def render_data(
         self,
@@ -368,6 +369,7 @@ class StationPanel(Static):
         gps_src: str,
         start_time: float,
         source_label: str,
+        location: dict | None = None,
     ) -> None:
         txt = Text()
         if source_label:
@@ -378,7 +380,18 @@ class StationPanel(Static):
             txt.append(f" {format_position(pos.lat, pos.lon)}\n", style="bold white")
             txt.append(f" {pos.lat:.6f}, {pos.lon:.6f}\n", style="dim")
             txt.append(" Grid  ", style="dim")
-            txt.append(f"{grid}\n", style="bold green")
+            txt.append(f"{grid}", style="bold green")
+            if location:
+                cq = location.get("cq", "?")
+                iaru = location.get("iaru", "?")
+                cc = location.get("cc", "")
+                country = location.get("country", "")
+                txt.append(f"   CQ {cq}  ITU {iaru}", style="dim cyan")
+                if cc:
+                    txt.append(f"  {cc}", style="bold cyan")
+                if country and country != cc:
+                    txt.append(f"  {country}", style="cyan")
+            txt.append("\n")
             if pos.alt is not None:
                 txt.append(" Alt   ", style="dim")
                 txt.append(f"{pos.alt:.0f} m\n", style="bold")
@@ -447,26 +460,38 @@ class ConnectionBar(Static):
                 txt.append("\n")
         self.update(txt)
 
+    # Column widths: icon(1) name(14) kind(6) status(11) extra
+    _COL_NAME   = 14
+    _COL_KIND   =  6
+    _COL_STATUS = 11
+
     def _fmt_conn(self, conn: dict) -> Text:
-        status = conn.get("status", "")
-        label = conn.get("label", "")
-        kind = conn.get("kind", "")
+        status  = conn.get("status", "")
+        label   = conn.get("label", "")
+        kind    = conn.get("kind", "")
         clients = conn.get("clients", [])
+        address = conn.get("address", "")
 
         active = status in self._ACTIVE
-        icon = "●" if active else "○"
-        colour = "green" if active else "dim red"
-        if status == "closed":
-            colour = "dim red"
+        icon   = "●" if active else "○"
+        colour = "green" if active else ("dim red" if status == "closed" else "dim")
 
         row = Text()
         row.append(f" {icon} ", style=colour)
-        row.append(label, style="bold" if active else "dim")
-        if kind:
-            row.append(f"  [{kind}]", style="dim")
-        row.append(f"  {status}", style=colour)
+        # Name column — pad to fixed width
+        name_col = label[:self._COL_NAME]
+        row.append(f"{name_col:<{self._COL_NAME}}", style="bold" if active else "dim")
+        # Kind column
+        kind_col = (f"[{kind}]" if kind else "")[:self._COL_KIND]
+        row.append(f"  {kind_col:<{self._COL_KIND}}", style="dim")
+        # Status column
+        status_col = status[:self._COL_STATUS]
+        row.append(f"  {status_col:<{self._COL_STATUS}}", style=colour)
+        # Extra: address / packet count / connected clients
+        if address:
+            row.append(f"  {address}", style="dim")
         if isinstance(clients, int) and clients > 0:
-            row.append(f"  {clients} pkts", style="dim")
+            row.append(f"  {clients} pkts", style="dim cyan")
         elif isinstance(clients, list) and clients:
             row.append(f"  ← {', '.join(str(c) for c in clients)}", style="dim cyan")
         return row
@@ -738,6 +763,7 @@ class RigtopApp(App[None]):
         }
         if pos is not None:
             result["grid"] = maidenhead(pos.lat, pos.lon)
+            result["location"] = _zone_lookup(pos.lat, pos.lon)
 
         mode, passband = rig.get_mode_and_passband()
         result["freq"] = rig.get_frequency()
@@ -768,6 +794,7 @@ class RigtopApp(App[None]):
         meters: dict[str, float] = data.get("meters") or {}
         gps_src: str = data.get("gps_src", "")
         source_label: str = data.get("source_label", "")
+        location: dict | None = data.get("location")
 
         # TX hold
         mono = _time.monotonic()
@@ -810,7 +837,7 @@ class RigtopApp(App[None]):
             freq, mode, passband, ptt, meters, self._rig_name, self._wd_tripped,
         )
         self.query_one(StationPanel).render_data(
-            pos, grid, gps_src, self._start_time, source_label,
+            pos, grid, gps_src, self._start_time, source_label, location,
         )
 
         # Update IS badge

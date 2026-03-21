@@ -208,9 +208,10 @@ class DirewolfClient:
         )
         return [
             {
-                "label": f"Direwolf KISS {self._host}:{self._port}",
+                "label": "DW KISS",
                 "kind": "tcp",
                 "status": status,
+                "address": f"{self._host}:{self._port}",
                 "clients": self._rx_count,
             }
         ]
