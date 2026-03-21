@@ -8,9 +8,37 @@ wheels/
 
 # Virtual environments
 .venv
+.env
 
 # Logs
 *.log
 
 # User config (use rigtop.example.toml as template)
 rigtop.toml
+
+# Test / coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Type-checker caches
+.mypy_cache/
+.pyright/
+
+# Ruff cache
+.ruff_cache/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Claude Code
+.claude/
