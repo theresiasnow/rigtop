@@ -11,6 +11,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  commit-lint:
+    name: Commit messages
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.14
+        run: uv python install 3.14
+
+      - name: Install dev dependencies
+        run: uv sync --group dev
+
+      - name: Check commit messages
+        run: uv run cz check --rev-range origin/${{ github.base_ref }}..HEAD
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
