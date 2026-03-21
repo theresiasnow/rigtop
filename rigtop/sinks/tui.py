@@ -390,18 +390,16 @@ class RigCommandPanel(Widget):
         self._updating = False
 
     def compose(self) -> ComposeResult:
-        with Horizontal(classes="cmd-row"):
-            yield Button("◄◄", id="step-m10k", classes="step")
-            yield Button("◄",  id="step-m1k",  classes="step")
-            yield Label("—", id="freq-lbl")
-            yield Button("►",  id="step-p1k",  classes="step")
-            yield Button("►►", id="step-p10k", classes="step")
-            yield Select([(m, m) for m in self._MODES], id="mode-sel")
-            yield Button("ATT: off", id="att-btn", classes="cycle")
-            yield Button("Pre: off", id="pre-btn", classes="cycle")
-        with Horizontal(classes="cmd-extra"):
-            yield Button("NB: off", id="nb-btn", classes="cycle")
-            yield Button("NR: off", id="nr-btn", classes="cycle")
+        yield Button("◄◄", id="step-m10k", classes="step")
+        yield Button("◄",  id="step-m1k",  classes="step")
+        yield Label("—", id="freq-lbl")
+        yield Button("►",  id="step-p1k",  classes="step")
+        yield Button("►►", id="step-p10k", classes="step")
+        yield Select([(m, m) for m in self._MODES], id="mode-sel")
+        yield Button("ATT: off", id="att-btn", classes="cycle")
+        yield Button("Pre: off", id="pre-btn", classes="cycle")
+        yield Button("NB: off",  id="nb-btn",  classes="cycle")
+        yield Button("NR: off",  id="nr-btn",  classes="cycle")
 
     def render_data(
         self,
@@ -925,18 +923,11 @@ class RigtopApp(App[None]):
         border: round $accent;
     }
     RigCommandPanel {
-        height: 7;
+        height: 5;
         border: round $surface;
-        layout: vertical;
-        padding: 0 1;
-    }
-    RigCommandPanel .cmd-row {
-        height: 3;
+        layout: horizontal;
         align: center middle;
-    }
-    RigCommandPanel .cmd-extra {
-        height: 1;
-        align: right middle;
+        padding: 0 1;
     }
     RigCommandPanel Button {
         height: 1;
