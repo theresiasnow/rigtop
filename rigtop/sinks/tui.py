@@ -402,57 +402,55 @@ class StationPanel(Static):
         location: dict | None = None,
         beacon_enabled: bool | None = None,
     ) -> None:
-        L = " "  # left margin
-
-        def row(label: str, value_cb) -> None:
-            txt.append(f"{L}{label:<7} ", style="dim")
-            value_cb()
-            txt.append("\n")
+        COL = 8   # label column width (including trailing space)
+        M   = " "  # left margin
 
         txt = Text()
-        if pos is None:
-            txt.append(f"{L}No GPS fix\n", style="yellow")
-        else:
-            txt.append(f"{L}{format_position(pos.lat, pos.lon)}\n", style="bold white")
 
-            # Grid + zones + country on one line
-            txt.append(f"{L}{'Grid':<7} ", style="dim")
-            txt.append(grid, style="bold green")
+        def lbl(text: str) -> None:
+            txt.append(f"{M}{text:<{COL - 1}} ", style="dim")
+
+        if pos is None:
+            txt.append(f"{M}No GPS fix\n", style="yellow")
+        else:
+            lbl("Pos")
+            txt.append(f"{format_position(pos.lat, pos.lon)}\n", style="bold white")
+
+            lbl("Grid")
+            txt.append(f"{grid}\n", style="bold green")
+
             if location:
-                cq = location.get("cq", "?")
-                iaru = location.get("iaru", "?")
-                cc = location.get("cc", "")
+                cq      = location.get("cq", "?")
+                iaru    = location.get("iaru", "?")
+                cc      = location.get("cc", "")
                 country = location.get("country", "")
-                txt.append(f"   CQ {cq}  ITU {iaru}", style="dim cyan")
-                if cc:
-                    txt.append(f"  {cc}", style="bold cyan")
-                if country and country != cc:
-                    txt.append(f"  {country}", style="cyan")
-            txt.append("\n")
+                lbl("Zones")
+                txt.append(f"CQ {cq}  ITU {iaru}\n", style="cyan")
+                if country:
+                    lbl("Country")
+                    if cc:
+                        txt.append(f"{cc}  ", style="bold cyan")
+                    txt.append(f"{country}\n", style="cyan")
 
             if pos.alt is not None:
-                txt.append(f"{L}{'Alt':<7} ", style="dim")
+                lbl("Alt")
                 txt.append(f"{pos.alt:.0f} m\n", style="bold")
 
-        # GPS source
-        txt.append(f"{L}{'GPS':<7} ", style="dim")
+        lbl("GPS")
         gps_style = "bold" if gps_src == "rig" else ("yellow" if gps_src else "dim")
         txt.append(f"{gps_src or '—'}\n", style=gps_style)
 
-        # Beacon state (only when APRS-IS sink present)
         if beacon_enabled is not None:
-            txt.append(f"{L}{'Beacon':<7} ", style="dim")
+            lbl("Beacon")
             if beacon_enabled:
-                txt.append("● ON", style="bold green")
+                txt.append("● ON\n", style="bold green")
             else:
-                txt.append("○ OFF", style="dim red")
-            txt.append("\n")
+                txt.append("○ OFF\n", style="dim red")
 
-        # Uptime
         uptime_s = int(_time.monotonic() - start_time)
         h, rem = divmod(uptime_s, 3600)
         m, s = divmod(rem, 60)
-        txt.append(f"{L}{'Up':<7} ", style="dim")
+        lbl("Up")
         txt.append(f"{h:02d}:{m:02d}:{s:02d}\n", style="dim")
         self.update(txt)
 
