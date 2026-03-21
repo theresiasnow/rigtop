@@ -1,0 +1,76 @@
+name: Feature Request
+description: Propose a new feature or enhancement for rigtop
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea that would make rigtop more useful on the air? Describe it below.
+        The more operating context you can share, the easier it is to evaluate.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise summary of the feature you would like to see.
+      placeholder: "e.g. Add a WSJT-X PSK Reporter upload sink"
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Use case / motivation
+      description: |
+        Why do you need this? What problem does it solve for you on the air or in your shack?
+      placeholder: |
+        When running FT8 portable, I want rigtop to automatically upload spots to PSK Reporter
+        so the cluster shows my current grid square without manual entry.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: Proposed solution
+      description: |
+        How do you imagine this working? Feel free to sketch a config snippet, CLI flag,
+        or TUI interaction — rough ideas are fine.
+      placeholder: |
+        A new sink `[sinks.pskreporter]` that reads callsign + grid from the existing
+        position pipeline and POSTs to pskreporter.info every 5 minutes.
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: |
+        Have you tried any workarounds or other tools? Why are they not sufficient?
+    validations:
+      required: false
+
+  - type: textarea
+    id: ham_radio_context
+    attributes:
+      label: Ham radio context
+      description: |
+        Relevant station details that help scope the request: rig model, operating mode,
+        licence class, typical workflow (portable / fixed / contest / emergency comms), etc.
+      placeholder: |
+        Rig: Icom IC-705 (portable HF/VHF)
+        Mode: FT8 via WSJT-X + Direwolf for APRS
+        Workflow: SOTA activations where grid square changes every outing
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Willing to contribute?
+      options:
+        - label: I would like to implement this myself and open a PR
+          required: false
+        - label: I can help test a prototype if someone else builds it
+          required: false

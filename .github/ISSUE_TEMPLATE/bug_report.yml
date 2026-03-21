@@ -1,0 +1,114 @@
+name: Bug Report
+description: Report a bug or unexpected behaviour in rigtop
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill in as much detail as you can — rig model and operating conditions are especially helpful.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise summary of the bug.
+      placeholder: "e.g. rigtop crashes when switching from USB to FM on the IC-7300"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the exact steps needed to trigger the bug.
+      placeholder: |
+        1. Start rigtop with `uv run rigtop`
+        2. Connect to rigctld on localhost:4532
+        3. Change rig mode to FM
+        4. Observe crash / incorrect behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: What actually happened? Include any error messages shown in the TUI or terminal.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS 14 (Sonoma)
+        - macOS 13 (Ventura)
+        - macOS 12 (Monterey)
+        - Ubuntu 24.04
+        - Ubuntu 22.04
+        - Debian 12
+        - Other Linux
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: python_version
+    attributes:
+      label: Python version
+      description: Output of `uv run python --version`
+      placeholder: "e.g. Python 3.12.3"
+    validations:
+      required: true
+
+  - type: input
+    id: rig_model
+    attributes:
+      label: Rig model
+      description: The radio transceiver you are using (leave blank if not applicable).
+      placeholder: "e.g. Icom IC-7300, Kenwood TS-890S, Yaesu FT-991A"
+    validations:
+      required: false
+
+  - type: input
+    id: rigtop_version
+    attributes:
+      label: rigtop version (git hash)
+      description: Output of `git rev-parse --short HEAD` in the rigtop directory.
+      placeholder: "e.g. 76b572a"
+    validations:
+      required: true
+
+  - type: textarea
+    id: log_snippet
+    attributes:
+      label: Log snippet
+      description: |
+        Paste the relevant portion of the rigtop log or terminal output.
+        Wrap in a code block or use the monospace button above.
+      render: text
+      placeholder: |
+        2026-03-21 14:03:22 | ERROR | rigtop.sources.rigctld | Connection refused: 127.0.0.1:4532
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context
+      description: |
+        Anything else that might be relevant — antenna type, operating mode (SSB/FM/CW/FT8),
+        APRS path, NMEA source, network topology, Direwolf version, etc.
+    validations:
+      required: false

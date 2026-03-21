@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & general discussion
+    url: https://github.com/thelastoutpostworkshop/rigtop/discussions
+    about: Ask operating questions, share configs, or discuss ideas before opening a formal issue.
