@@ -9,7 +9,7 @@ class TestAprsBuffer:
     def test_empty_buffer_renders_placeholder(self):
         buf = AprsBuffer()
         text = buf.render()
-        assert "no APRS" in str(text)
+        assert "no traffic" in str(text)
 
     def test_push_adds_line(self):
         buf = AprsBuffer()

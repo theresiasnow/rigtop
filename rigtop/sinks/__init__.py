@@ -12,6 +12,11 @@ from rigtop.sources import Position
 class PositionSink(ABC):
     """Base class for position output destinations."""
 
+    #: Optional display name set from config ``name`` field.
+    name: str = ""
+    #: Set False to disable this sink without removing it from the list.
+    enabled: bool = True
+
     @abstractmethod
     def start(self) -> None: ...
 
@@ -29,12 +34,19 @@ class PositionSink(ABC):
     def close(self) -> None: ...
 
     def connections(self) -> list[dict[str, Any]]:
-        """Return a list of active connection descriptors for the TUI.
+        """Return connection descriptors for the TUI.
 
-        Each dict has keys: label, kind (serial/tcp/udp), status, clients.
+        Each dict: label, kind (serial/tcp/udp), status, and optionally address, clients.
         Override in subclasses that manage connections.
         """
         return []
+
+    def labelled_connections(self) -> list[dict[str, Any]]:
+        """Like connections() but appends self.name to each label when set."""
+        conns = self.connections()
+        if not self.name:
+            return conns
+        return [{**c, "label": f"{c.get('label', '')} {self.name}".strip()} for c in conns]
 
     def __enter__(self):
         self.start()
@@ -74,7 +86,11 @@ def create_sink(config: dict[str, Any]) -> PositionSink:
     if not any(p.kind == p.VAR_KEYWORD for p in sig.parameters.values()):
         accepted = set(sig.parameters) - {"self"}
         kwargs = {k: v for k, v in kwargs.items() if k in accepted}
-    return cls(**kwargs)
+    sink = cls(**kwargs)
+    # Apply shared base fields from config (not forwarded to constructors).
+    sink.name = config.get("name", "")
+    sink.enabled = config.get("enabled", True)
+    return sink
 
 
 # Import concrete sinks to trigger registration

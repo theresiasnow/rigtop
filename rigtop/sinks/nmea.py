@@ -34,13 +34,11 @@ class NmeaSink(PositionSink):
         port: int = 10110,
         device: str = "",
         baudrate: int = 4800,
-        name: str = "",
     ) -> None:
         self.host = host
         self.port = port
         self.device = device
         self.baudrate = baudrate
-        self.name = name
         # TCP mode state
         self._server: socket.socket | None = None
         self._clients: list[socket.socket] = []
@@ -179,7 +177,7 @@ class NmeaSink(PositionSink):
         return f"nmea@{self.host}:{self.port}"
 
     def connections(self) -> list[dict]:
-        label = f"nmea {self.name}" if self.name else "nmea"
+        label = "nmea"
         if self._is_serial:
             is_open = self._serial is not None and self._serial.is_open
             return [{

@@ -471,7 +471,9 @@ class ConnectionBar(Static):
         for sink in sinks:
             if type(sink).__name__ == "TuiSink":
                 continue
-            if hasattr(sink, "connections"):
+            if hasattr(sink, "labelled_connections"):
+                lines.extend(self._fmt_conn(c) for c in sink.labelled_connections())
+            elif hasattr(sink, "connections"):
                 lines.extend(self._fmt_conn(c) for c in sink.connections())
             elif hasattr(sink, "connected"):
                 connected = sink.connected
