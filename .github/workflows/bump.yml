@@ -1,6 +1,8 @@
 name: Bump version
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       increment:
@@ -14,6 +16,9 @@ jobs:
   bump:
     name: cz bump → build → release
     runs-on: ubuntu-latest
+    # Skip the bump commit itself to avoid an infinite loop.
+    # commitizen always prefixes bump commits with "bump:".
+    if: "!startsWith(github.event.head_commit.message, 'bump:')"
 
     permissions:
       contents: write   # push tag + create GitHub release
