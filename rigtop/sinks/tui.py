@@ -371,7 +371,7 @@ class RigControlPanel(Static, can_focus=True):
 
 
 class RigCommandPanel(Widget):
-    """Freq step buttons, mode dropdown, ATT and preamp cycle buttons."""
+    """Freq step buttons, mode dropdown, ATT/Pre/NB/NR controls."""
 
     _MODES: ClassVar[list[str]] = [
         "FM", "USB", "LSB", "AM", "CW", "CWR", "PKTFM", "PKTUSB", "PKTLSB",
@@ -385,17 +385,23 @@ class RigCommandPanel(Widget):
         self._freq_hz: int | None = None
         self._att_idx: int = 0
         self._pre_idx: int = 0
+        self._nb_on: bool = False
+        self._nr_on: bool = False
         self._updating = False
 
     def compose(self) -> ComposeResult:
-        yield Button("◄◄", id="step-m10k", classes="step")
-        yield Button("◄",  id="step-m1k",  classes="step")
-        yield Label("—", id="freq-lbl")
-        yield Button("►",  id="step-p1k",  classes="step")
-        yield Button("►►", id="step-p10k", classes="step")
-        yield Select([(m, m) for m in self._MODES], id="mode-sel")
-        yield Button("ATT: off", id="att-btn", classes="cycle")
-        yield Button("Pre: off", id="pre-btn", classes="cycle")
+        with Horizontal(classes="cmd-row"):
+            yield Button("◄◄", id="step-m10k", classes="step")
+            yield Button("◄",  id="step-m1k",  classes="step")
+            yield Label("—", id="freq-lbl")
+            yield Button("►",  id="step-p1k",  classes="step")
+            yield Button("►►", id="step-p10k", classes="step")
+            yield Select([(m, m) for m in self._MODES], id="mode-sel")
+            yield Button("ATT: off", id="att-btn", classes="cycle")
+            yield Button("Pre: off", id="pre-btn", classes="cycle")
+        with Horizontal(classes="cmd-extra"):
+            yield Button("NB: off", id="nb-btn", classes="cycle")
+            yield Button("NR: off", id="nr-btn", classes="cycle")
 
     def render_data(
         self,
@@ -447,6 +453,22 @@ class RigCommandPanel(Widget):
             except Exception:
                 pass
 
+        nb_raw = controls.get("NB")
+        if nb_raw is not None:
+            self._nb_on = bool(nb_raw)
+            try:
+                self.query_one("#nb-btn", Button).label = self._nb_label()
+            except Exception:
+                pass
+
+        nr_raw = controls.get("NR")
+        if nr_raw is not None:
+            self._nr_on = bool(nr_raw)
+            try:
+                self.query_one("#nr-btn", Button).label = self._nr_label()
+            except Exception:
+                pass
+
     def _att_label(self) -> str:
         v = self._ATT_STEPS[self._att_idx]
         return f"ATT: {v} dB" if v else "ATT: off"
@@ -454,6 +476,12 @@ class RigCommandPanel(Widget):
     def _pre_label(self) -> str:
         v = self._PRE_STEPS[self._pre_idx]
         return f"Pre: {v} dB" if v else "Pre: off"
+
+    def _nb_label(self) -> str:
+        return "NB: on" if self._nb_on else "NB: off"
+
+    def _nr_label(self) -> str:
+        return "NR: on" if self._nr_on else "NR: off"
 
     @on(Button.Pressed)
     def _handle_button(self, event: Button.Pressed) -> None:
@@ -474,6 +502,18 @@ class RigCommandPanel(Widget):
             self._pre_idx = (self._pre_idx + 1) % len(self._PRE_STEPS)
             if self._rig.set_level("PREAMP", float(self._PRE_STEPS[self._pre_idx])):
                 self.query_one("#pre-btn", Button).label = self._pre_label()
+        elif btn_id == "nb-btn":
+            self._nb_on = not self._nb_on
+            if self._rig.set_func("NB", self._nb_on):
+                self.query_one("#nb-btn", Button).label = self._nb_label()
+            else:
+                self._nb_on = not self._nb_on  # revert on failure
+        elif btn_id == "nr-btn":
+            self._nr_on = not self._nr_on
+            if self._rig.set_func("NR", self._nr_on):
+                self.query_one("#nr-btn", Button).label = self._nr_label()
+            else:
+                self._nr_on = not self._nr_on  # revert on failure
 
     @on(Select.Changed, "#mode-sel")
     def _mode_changed(self, event: Select.Changed) -> None:
@@ -885,11 +925,18 @@ class RigtopApp(App[None]):
         border: round $accent;
     }
     RigCommandPanel {
-        height: 5;
+        height: 7;
         border: round $surface;
-        layout: horizontal;
-        align: center middle;
+        layout: vertical;
         padding: 0 1;
+    }
+    RigCommandPanel .cmd-row {
+        height: 3;
+        align: center middle;
+    }
+    RigCommandPanel .cmd-extra {
+        height: 1;
+        align: left middle;
     }
     RigCommandPanel Button {
         height: 1;
@@ -1203,10 +1250,15 @@ class RigtopApp(App[None]):
                 m["RFPOWER"] = rfpower
             result["meters"] = m
 
-        # Read control levels every 5th poll (they change rarely)
+        # Read control levels and functions every 5th poll (they change rarely)
         self._ctrl_poll_n = (self._ctrl_poll_n + 1) % 5
         if self._ctrl_poll_n == 0:
-            result["controls"] = {lvl: rig.get_level(lvl) for lvl in _CTRL_ALL}
+            controls = {lvl: rig.get_level(lvl) for lvl in _CTRL_ALL}
+            for func in ("NB", "NR"):
+                val = rig.get_func(func)
+                if val is not None:
+                    controls[func] = 1.0 if val else 0.0
+            result["controls"] = controls
 
         return result
 
@@ -1286,7 +1338,8 @@ class RigtopApp(App[None]):
             self._last_controls = data["controls"]
         self.query_one(RigControlPanel).render_data(self._last_controls)
         self.query_one(RigCommandPanel).render_data(freq, mode, self._last_controls)
-        self.query_one(WaterfallPanel).push(meters.get("STRENGTH"))
+        # Only feed the waterfall during RX — S-meter is meaningless while TX
+        self.query_one(WaterfallPanel).push(None if ptt else meters.get("STRENGTH"))
 
         # Update IS badge
         aprs_is_connected = any(
