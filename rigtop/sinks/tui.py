@@ -481,6 +481,59 @@ class RigCommandPanel(Widget):
             self._rig.set_mode(str(event.value))
 
 
+# ── Waterfall panel ─────────────────────────────────────────────────────────
+
+class WaterfallPanel(Static):
+    """Tiny scrolling signal-strength waterfall — newest row at top."""
+
+    _WIDTH: ClassVar[int] = 48
+    _ROWS:  ClassVar[int] = 5
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._history: deque[float | None] = deque(maxlen=self._ROWS)
+        self.border_title = "Waterfall"
+
+    def push(self, strength: float | None) -> None:
+        self._history.appendleft(strength)
+        self._render()
+
+    def _render(self) -> None:
+        rows = list(self._history)
+        while len(rows) < self._ROWS:
+            rows.append(None)
+        txt = Text(overflow="fold")
+        for i, val in enumerate(rows):
+            txt.append_text(self._row(val))
+            if i < len(rows) - 1:
+                txt.append("\n")
+        self.update(txt)
+
+    @staticmethod
+    def _row(val: float | None) -> Text:
+        row = Text(overflow="fold")
+        if val is None:
+            row.append("░" * WaterfallPanel._WIDTH, style="dim")
+            return row
+        norm   = max(0.0, min(1.0, (val + 54) / 114))
+        filled = int(norm * WaterfallPanel._WIDTH)
+        if norm < 0.15:
+            colour, char = "dim blue", "░"
+        elif norm < 0.35:
+            colour, char = "cyan", "▒"
+        elif norm < 0.55:
+            colour, char = "green", "▒"
+        elif norm < 0.75:
+            colour, char = "yellow", "▓"
+        else:
+            colour, char = "red", "█"
+        row.append(char * filled, style=colour)
+        row.append("░" * (WaterfallPanel._WIDTH - filled), style="dim")
+        db_str = f" {val:+.0f}dB"
+        row.append(db_str, style="bold" if norm > 0.3 else "dim")
+        return row
+
+
 # ── Command completion ──────────────────────────────────────────────────────
 
 class CommandSuggester(Suggester):
@@ -844,6 +897,11 @@ class RigtopApp(App[None]):
         width: 16;
         margin: 0 1;
     }
+    WaterfallPanel {
+        height: 7;
+        border: round $surface;
+        padding: 0 1;
+    }
     #aprs-row {
         height: 9;
         display: none;
@@ -966,6 +1024,7 @@ class RigtopApp(App[None]):
             yield StationPanel(id="station-panel")
         yield RigControlPanel(self._rig, id="ctrl-panel")
         yield RigCommandPanel(self._rig, id="cmd-panel")
+        yield WaterfallPanel(id="waterfall")
         yield ConnectionBar(id="conn-bar")
         with Horizontal(id="aprs-row"):
             yield AprsPanel(id="aprs-panel")
@@ -1218,6 +1277,7 @@ class RigtopApp(App[None]):
             self._last_controls = data["controls"]
         self.query_one(RigControlPanel).render_data(self._last_controls)
         self.query_one(RigCommandPanel).render_data(freq, mode, self._last_controls)
+        self.query_one(WaterfallPanel).push(meters.get("STRENGTH"))
 
         # Update IS badge
         aprs_is_connected = any(
