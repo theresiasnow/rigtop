@@ -1356,11 +1356,7 @@ class RigtopApp(App[None]):
             self._rig_name,
             self._wd_tripped,
         )
-        aprsis_sinks = [
-            s
-            for s in self._sinks
-            if type(s).__name__ == "AprsIsSink" and getattr(s, "enabled", True)
-        ]
+        aprsis_sinks = [s for s in self._sinks if type(s).__name__ == "AprsIsSink"]
         if aprsis_sinks:
             s = aprsis_sinks[0]
             beacon_enabled = s._beacon_enabled and s.connected
