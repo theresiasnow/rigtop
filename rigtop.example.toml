@@ -48,10 +48,9 @@ port = 11123            # GPS2IP TCP port
 
 # --- APRS ---
 # QSY rig to APRS frequency when :aprs on is used.
-# Set enabled = true to also QSY on startup.
 # Remove this section if you don't use APRS.
 # [aprs]
-# enabled = false       # true = QSY on startup; false = only on :aprs on
+# enabled = false       # QSY only happens on :aprs on
 # freq = 144.800        # MHz (EU: 144.800, NA: 144.390)
 # qsy_mode = "FM"
 
@@ -77,7 +76,7 @@ tx_timeout = 120       # seconds (minimum 10)
 # Quick QSY to packet BBS frequency via :bbs on / :bbs off in the TUI.
 # Saves and restores previous freq/mode automatically.
 # [bbs]
-# enabled = false       # true = QSY on startup; false = only on :bbs on
+# enabled = false       # QSY currently only happens on :bbs on
 # freq = 144.675        # packet frequency in MHz (SM: 144.675, EU common: 144.625)
 # mode = "PKTFM"        # rig mode (PKTFM = 1200 baud FM, PKTUSB = 9600 baud USB)
 
