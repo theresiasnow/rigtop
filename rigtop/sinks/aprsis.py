@@ -60,7 +60,6 @@ class AprsIsSink(PositionSink):
         symbol_code: str = ">",
         interval: int = 120,
         aprs_filter: str = "",
-        beacon: bool = False,
     ) -> None:
         self._callsign = callsign
         self._server = server
@@ -78,7 +77,7 @@ class AprsIsSink(PositionSink):
         self._keepalive_thread: threading.Thread | None = None
         self._receiver_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
-        self._beacon_enabled = beacon
+        self._beacon_enabled = True
         self._last_beacon = 0.0
         self._last_rx: float = 0.0    # monotonic time of last received packet
         self._rx_count: int = 0       # total received packets

@@ -135,7 +135,6 @@ class SinkConfig(BaseModel):
     comment: str = "rigtop"   # beacon comment (aprsis sink)
     interval: int = 120        # beacon interval seconds (aprsis sink)
     aprs_filter: str = ""     # APRS-IS server filter (e.g. r/59.2/18.1/200)
-    beacon: bool = False       # enable position beaconing (aprsis sink)
 
     _PORT_DEFAULTS: dict[str, int] = {
         "aprsis": 14580,
