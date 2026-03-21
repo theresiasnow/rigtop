@@ -311,27 +311,27 @@ class CommandSuggester(Suggester):
 # ── Textual widgets ─────────────────────────────────────────────────────────
 
 class AprsPanel(Static):
-    """Bottom-left pane: live APRS traffic from buffer."""
+    """Bottom-left pane: live RF/APRS traffic from buffer."""
 
-    def render_data(self, buf: AprsBuffer | None) -> None:
-        self.border_title = "APRS Traffic"
+    def render_data(self, buf: AprsBuffer | None, title: str = "RF Traffic") -> None:
+        self.border_title = title
         if buf is None:
             txt = Text()
-            txt.append(" No APRS sink configured", style="dim")
+            txt.append(" No packets yet", style="dim")
             self.update(txt)
         else:
             self.update(buf.render(max_lines=8))
 
 
 class MsgPanel(Static):
-    """Bottom-right pane: APRS message log (sent + received)."""
+    """Bottom-right pane: packet message log (sent + received)."""
 
-    def render_data(self, buf: MessageBuffer | None) -> None:
+    def render_data(self, buf: MessageBuffer | None, title: str = "Messages") -> None:
         unread = f"  {buf.unread} unread" if buf and buf.unread else ""
-        self.border_title = f"Messages{unread}"
+        self.border_title = f"{title}{unread}"
         if buf is None:
             txt = Text()
-            txt.append(" No APRS-IS sink configured", style="dim")
+            txt.append(" (no messages)", style="dim")
             self.update(txt)
         else:
             self.update(buf.render(max_lines=8))
@@ -889,9 +889,10 @@ class RigtopApp(App[None]):
             pos, grid, gps_src, self._start_time, location,
         )
 
-        # Update APRS / messages panes when APRS mode is active
-        if self._aprs_active:
-            self.query_one(AprsPanel).render_data(self._aprs_buffer)
+        # Update traffic / messages panes when APRS or packet mode is active
+        if self._aprs_active or self._packet_active:
+            mode_label = "APRS Traffic" if self._aprs_active else "Packet Traffic"
+            self.query_one(AprsPanel).render_data(self._aprs_buffer, title=mode_label)
             self.query_one(MsgPanel).render_data(self._msg_buffer)
 
         # Update IS badge
@@ -1062,6 +1063,9 @@ class RigtopApp(App[None]):
                     qsy.append(cfg.mode)
             self._packet_active = True
             self._update_title()
+            self.query_one("#aprs-row").display = True
+            self.query_one(AprsPanel).render_data(self._aprs_buffer, title="Packet Traffic")
+            self.query_one(MsgPanel).render_data(self._msg_buffer)
             self._start_direwolf("packet")
             self.notify(f"Packet ON ({', '.join(qsy)})", title="Packet")
         elif action == "off":
@@ -1077,6 +1081,8 @@ class RigtopApp(App[None]):
                     self._saved_mode = None
             self._packet_active = False
             self._update_title()
+            if not self._aprs_active:
+                self.query_one("#aprs-row").display = False
             self._stop_direwolf()
             msg = "Packet OFF"
             if restored:
