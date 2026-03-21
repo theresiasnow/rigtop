@@ -28,7 +28,7 @@ class DirewolfLauncher:
         self.stderr_callback = stderr_callback
         self.extra_args = extra_args or []
         self._proc: subprocess.Popen[bytes] | None = None
-        self._pty_proc = None           # winpty PtyProcess, Windows only
+        self._pty_proc = None  # winpty PtyProcess, Windows only
         self._stderr_thread: threading.Thread | None = None
 
     # ------------------------------------------------------------------
@@ -51,14 +51,11 @@ class DirewolfLauncher:
         exe = self._find_exe()
         if not self.config_file:
             raise RuntimeError(
-                "No config_file set — call switch_config() or "
-                "use :aprs on / :bbs on first."
+                "No config_file set — call switch_config() or use :aprs on / :bbs on first."
             )
         conf = self.install_path / self.config_file
         if not conf.is_file():
-            raise FileNotFoundError(
-                f"Config file not found: {conf}."
-            )
+            raise FileNotFoundError(f"Config file not found: {conf}.")
         cmd = [exe, "-t", "0", "-c", str(conf)]
         cmd.extend(self.extra_args)
         return cmd
@@ -94,10 +91,11 @@ class DirewolfLauncher:
         self._pty_proc = winpty.PtyProcess.spawn(
             cmd,
             cwd=str(self.install_path),
-            dimensions=(50, 220),   # rows x cols (enough for Direwolf's wide output)
+            dimensions=(50, 220),  # rows x cols (enough for Direwolf's wide output)
         )
         self._stderr_thread = threading.Thread(
-            target=self._read_pty, daemon=True,
+            target=self._read_pty,
+            daemon=True,
         )
         self._stderr_thread.start()
         time.sleep(settle)
@@ -105,8 +103,7 @@ class DirewolfLauncher:
             exitcode = self._pty_proc.exitstatus
             self._pty_proc = None
             raise RuntimeError(
-                f"Direwolf exited immediately (exit code {exitcode}). "
-                f"Command: {' '.join(cmd)}"
+                f"Direwolf exited immediately (exit code {exitcode}). Command: {' '.join(cmd)}"
             )
         logger.info("Direwolf running via ConPTY")
 
@@ -124,7 +121,8 @@ class DirewolfLauncher:
         )
         if self._proc.stdout:
             self._stderr_thread = threading.Thread(
-                target=self._read_output, daemon=True,
+                target=self._read_output,
+                daemon=True,
             )
             self._stderr_thread.start()
         time.sleep(settle)

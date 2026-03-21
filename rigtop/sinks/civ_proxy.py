@@ -43,6 +43,7 @@ DEFAULT_RIG_ADDR = 0xA4  # IC-705
 # BCD helpers — ICOM encodes frequency/mode data as BCD
 # ---------------------------------------------------------------------------
 
+
 def _freq_to_bcd(freq_hz: int) -> bytes:
     """Encode frequency (Hz) as 5-byte little-endian BCD (ICOM format).
 
@@ -71,9 +72,16 @@ def _bcd_to_freq(data: bytes) -> int:
 
 # Mode byte → rigctld mode string
 _CIV_MODE_TO_NAME: dict[int, str] = {
-    0x00: "LSB", 0x01: "USB", 0x02: "AM", 0x03: "CW",
-    0x04: "RTTY", 0x05: "FM", 0x06: "WFM", 0x07: "CW-R",
-    0x08: "RTTY-R", 0x17: "DV",
+    0x00: "LSB",
+    0x01: "USB",
+    0x02: "AM",
+    0x03: "CW",
+    0x04: "RTTY",
+    0x05: "FM",
+    0x06: "WFM",
+    0x07: "CW-R",
+    0x08: "RTTY-R",
+    0x17: "DV",
 }
 _NAME_TO_CIV_MODE: dict[str, int] = {v: k for k, v in _CIV_MODE_TO_NAME.items()}
 
@@ -102,8 +110,10 @@ def _bytes_to_mode(data: bytes) -> tuple[str, int]:
 # CI-V frame builder / parser
 # ---------------------------------------------------------------------------
 
-def _build_frame(to_addr: int, from_addr: int, cmd: int,
-                 sub: int | None = None, data: bytes = b"") -> bytes:
+
+def _build_frame(
+    to_addr: int, from_addr: int, cmd: int, sub: int | None = None, data: bytes = b""
+) -> bytes:
     """Build a complete CI-V frame."""
     frame = bytes([PREAMBLE, PREAMBLE, to_addr, from_addr, cmd])
     if sub is not None:
@@ -126,6 +136,7 @@ def _nak_frame(to_addr: int, from_addr: int) -> bytes:
 # ---------------------------------------------------------------------------
 # The sink
 # ---------------------------------------------------------------------------
+
 
 @register_sink("civ_proxy")
 class CivProxySink(PositionSink):
@@ -166,7 +177,7 @@ class CivProxySink(PositionSink):
         self._serial = None  # serial.Serial
         self._stop = threading.Event()
         self._reader_thread: threading.Thread | None = None
-        self._serial_lock = threading.Lock()   # guards serial writes
+        self._serial_lock = threading.Lock()  # guards serial writes
         self._rigctld_sock: socket.socket | None = None
         self._rigctld_lock = threading.Lock()  # guards rigctld socket
         # Cached rig state (updated each poll cycle via send())
@@ -191,8 +202,7 @@ class CivProxySink(PositionSink):
             import serial
         except ImportError:
             logger.warning(
-                "pyserial not installed — civ_proxy disabled. "
-                "Install with: pip install pyserial"
+                "pyserial not installed — civ_proxy disabled. Install with: pip install pyserial"
             )
             return
         try:
@@ -203,7 +213,9 @@ class CivProxySink(PositionSink):
             )
             logger.info(
                 "CI-V proxy opened {} @ {} baud (rig addr 0x{:02X})",
-                self.device, self.baudrate, self.rig_addr,
+                self.device,
+                self.baudrate,
+                self.rig_addr,
             )
         except serial.SerialException as exc:
             logger.warning("civ_proxy: cannot open {}: {}", self.device, exc)
@@ -211,14 +223,13 @@ class CivProxySink(PositionSink):
             return
         # Own dedicated rigctld connection — never shared with the poll loop
         try:
-            sock = socket.create_connection(
-                (self._rigctld_host, self._rigctld_port), timeout=5
-            )
+            sock = socket.create_connection((self._rigctld_host, self._rigctld_port), timeout=5)
             sock.settimeout(3.0)
             self._rigctld_sock = sock
             logger.info(
                 "CI-V proxy rigctld connection {}:{}",
-                self._rigctld_host, self._rigctld_port,
+                self._rigctld_host,
+                self._rigctld_port,
             )
         except OSError as exc:
             logger.warning("civ_proxy: cannot connect to rigctld: {}", exc)
@@ -252,7 +263,7 @@ class CivProxySink(PositionSink):
         if freq:
             try:
                 self._freq_hz = int(float(freq))
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 pass
         mode = kwargs.get("mode")
         if mode:
@@ -261,7 +272,7 @@ class CivProxySink(PositionSink):
         if passband is not None:
             try:
                 self._passband = int(passband)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 pass
         ptt = kwargs.get("ptt")
         if ptt is not None:
@@ -312,8 +323,8 @@ class CivProxySink(PositionSink):
                 if eom_idx < 0:
                     # Incomplete frame — wait for more data
                     break
-                frame = bytes(buf[start:eom_idx + 1])
-                buf = buf[eom_idx + 1:]
+                frame = bytes(buf[start : eom_idx + 1])
+                buf = buf[eom_idx + 1 :]
                 self._handle_frame(frame)
 
     # ---- Frame handler ----------------------------------------------------
@@ -335,7 +346,9 @@ class CivProxySink(PositionSink):
         self._rx_frames += 1
         logger.debug(
             "CI-V RX: {:02X}→{:02X} cmd={:02X} payload={}",
-            from_addr, to_addr, cmd,
+            from_addr,
+            to_addr,
+            cmd,
             payload.hex() if payload else "(empty)",
         )
 
@@ -471,8 +484,7 @@ class CivProxySink(PositionSink):
         if len(payload) == 1:
             # Read PTT state
             ptt_byte = 0x01 if self._ptt else 0x00
-            return _build_frame(caller, self.rig_addr, 0x1C, sub=0x00,
-                                data=bytes([ptt_byte]))
+            return _build_frame(caller, self.rig_addr, 0x1C, sub=0x00, data=bytes([ptt_byte]))
         # Set PTT
         desired = payload[1] != 0x00
         logger.info("CI-V: set PTT {}", "TX" if desired else "RX")
@@ -490,8 +502,7 @@ class CivProxySink(PositionSink):
         val = max(0, min(9999, val))
         hi = val // 100
         lo = val % 100
-        return bytes([((hi // 10) << 4) | (hi % 10),
-                      ((lo // 10) << 4) | (lo % 10)])
+        return bytes([((hi // 10) << 4) | (hi % 10), ((lo // 10) << 4) | (lo % 10)])
 
     def _write(self, data: bytes) -> None:
         """Write a CI-V frame to the serial port."""
@@ -512,12 +523,16 @@ class CivProxySink(PositionSink):
 
     def connections(self) -> list[dict]:
         is_open = self._serial is not None and self._serial.is_open
-        return [{
-            "label": "CI-V proxy",
-            "kind": "serial",
-            "status": "open" if is_open else "closed",
-            "address": self.device,
-            "clients": [
-                f"rig 0x{self.rig_addr:02X}  rx:{self._rx_frames} tx:{self._tx_frames}",
-            ] if is_open else [],
-        }]
+        return [
+            {
+                "label": "CI-V proxy",
+                "kind": "serial",
+                "status": "open" if is_open else "closed",
+                "address": self.device,
+                "clients": [
+                    f"rig 0x{self.rig_addr:02X}  rx:{self._rx_frames} tx:{self._tx_frames}",
+                ]
+                if is_open
+                else [],
+            }
+        ]

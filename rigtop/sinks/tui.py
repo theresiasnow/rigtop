@@ -28,6 +28,7 @@ from rigtop.zones import lookup as _zone_lookup
 
 # ── APRS / message buffer classes (used by aprsis sink + cli.py) ───────────
 
+
 class AprsBuffer:
     """Ring buffer of incoming APRS-IS packets for display."""
 
@@ -114,19 +115,25 @@ _CHAN_RE = re.compile(r"^\[\d+[LR]?\]")
 _IGATE_RE = re.compile(r"^\[ig\]", re.IGNORECASE)
 
 _DW_STYLES: dict[str, tuple[str, str]] = {
-    "rigtop":  ("dim",        "dim"),
-    "error":   ("dim red",    "bold red"),
-    "warn":    ("dim yellow", "yellow"),
-    "igate":   ("dim green",  "green"),
-    "packet":  ("dim cyan",   "bold white"),
-    "status":  ("dim",        "dim yellow"),
-    "info":    ("dim",        "white"),
+    "rigtop": ("dim", "dim"),
+    "error": ("dim red", "bold red"),
+    "warn": ("dim yellow", "yellow"),
+    "igate": ("dim green", "green"),
+    "packet": ("dim cyan", "bold white"),
+    "status": ("dim", "dim yellow"),
+    "info": ("dim", "white"),
 }
 
 _STATUS_KEYWORDS = (
-    "Ready to accept", "Attached to KISS", "Now connected",
-    "Check server", "connected to IGate", "Listening",
-    "Dire Wolf", "dire wolf", "direwolf",
+    "Ready to accept",
+    "Attached to KISS",
+    "Now connected",
+    "Check server",
+    "connected to IGate",
+    "Listening",
+    "Dire Wolf",
+    "dire wolf",
+    "direwolf",
 )
 
 
@@ -198,12 +205,12 @@ class DirewolfBuffer:
 
 METER_ORDER = ["STRENGTH", "RFPOWER", "ALC", "SWR", "RFPOWER_METER", "COMP_METER"]
 METER_LABELS = {
-    "STRENGTH":     "S-meter",
-    "RFPOWER":      "TX pwr",
-    "ALC":          "ALC",
-    "SWR":          "SWR",
+    "STRENGTH": "S-meter",
+    "RFPOWER": "TX pwr",
+    "ALC": "ALC",
+    "SWR": "SWR",
     "RFPOWER_METER": "Pwr out",
-    "COMP_METER":   "Comp",
+    "COMP_METER": "Comp",
 }
 
 
@@ -258,24 +265,24 @@ def _meter_bar(name: str, value: float, width: int = 18) -> Text:
 
 #: Continuous levels (0.0-1.0) shown as percentage bars in RigControlPanel
 _CTRL_PCT: list[tuple[str, str]] = [
-    ("AF",      "Vol"),
-    ("RF",      "RF"),
-    ("SQL",     "SQL"),
+    ("AF", "Vol"),
+    ("RF", "RF"),
+    ("SQL", "SQL"),
     ("MICGAIN", "Mic"),
     ("RFPOWER", "Pwr"),
 ]
 #: All levels polled from the rig (incl. ATT/PREAMP for RigCommandPanel)
 _CTRL_ALL: list[str] = [k for k, _ in _CTRL_PCT] + ["ATT", "PREAMP"]
 
-_CTRL_STEP = 0.05   # 5 % per arrow keypress
+_CTRL_STEP = 0.05  # 5 % per arrow keypress
 
 
 def _control_bar(label: str, value: float, width: int = 16, selected: bool = False) -> Text:
-    norm  = max(0.0, min(1.0, value))
+    norm = max(0.0, min(1.0, value))
     filled = int(norm * width)
-    bar   = "█" * filled + "░" * (width - filled)
-    pct   = f"{value * 100:.0f}%"
-    line  = Text()
+    bar = "█" * filled + "░" * (width - filled)
+    pct = f"{value * 100:.0f}%"
+    line = Text()
     arrow = "▶ " if selected else "  "
     line.append(f" {arrow}{label:<5}", style="bold cyan" if selected else "bold")
     line.append(bar, style="bold cyan" if selected else "cyan")
@@ -287,11 +294,11 @@ class RigControlPanel(Static, can_focus=True):
     """Horizontal continuous-level bars — Tab to focus, ◄► select control, ▲▼ adjust."""
 
     BINDINGS: ClassVar[list] = [
-        Binding("left",   "prev_ctrl",  "Prev",  show=False),
-        Binding("right",  "next_ctrl",  "Next",  show=False),
-        Binding("up",     "increase",   "+5%",   show=False),
-        Binding("down",   "decrease",   "-5%",   show=False),
-        Binding("escape", "blur_pane",  "Done",  show=False),
+        Binding("left", "prev_ctrl", "Prev", show=False),
+        Binding("right", "next_ctrl", "Next", show=False),
+        Binding("up", "increase", "+5%", show=False),
+        Binding("down", "decrease", "-5%", show=False),
+        Binding("escape", "blur_pane", "Done", show=False),
     ]
 
     def __init__(self, rig, **kwargs) -> None:
@@ -374,11 +381,19 @@ class RigCommandPanel(Widget):
     """Freq step buttons, mode dropdown, ATT/Pre/NB/NR controls."""
 
     _MODES: ClassVar[list[str]] = [
-        "FM", "USB", "LSB", "AM", "CW", "CWR", "PKTFM", "PKTUSB", "PKTLSB",
+        "FM",
+        "USB",
+        "LSB",
+        "AM",
+        "CW",
+        "CWR",
+        "PKTFM",
+        "PKTUSB",
+        "PKTLSB",
     ]
     _ATT_STEPS: ClassVar[list[int]] = [0, 6, 12, 18]
     _PRE_STEPS: ClassVar[list[int]] = [0, 10, 20]
-    _DATA_ON:  ClassVar[dict[str, str]] = {"FM": "PKTFM", "USB": "PKTUSB", "LSB": "PKTLSB"}
+    _DATA_ON: ClassVar[dict[str, str]] = {"FM": "PKTFM", "USB": "PKTUSB", "LSB": "PKTLSB"}
     _DATA_OFF: ClassVar[dict[str, str]] = {"PKTFM": "FM", "PKTUSB": "USB", "PKTLSB": "LSB"}
 
     def __init__(self, rig, **kwargs) -> None:
@@ -394,15 +409,15 @@ class RigCommandPanel(Widget):
 
     def compose(self) -> ComposeResult:
         yield Button("◄◄", id="step-m10k", classes="step")
-        yield Button("◄",  id="step-m1k",  classes="step")
+        yield Button("◄", id="step-m1k", classes="step")
         yield Label("—", id="freq-lbl")
-        yield Button("►",  id="step-p1k",  classes="step")
+        yield Button("►", id="step-p1k", classes="step")
         yield Button("►►", id="step-p10k", classes="step")
         yield Select([(m, m) for m in self._MODES], id="mode-sel")
         yield Button("ATT: off", id="att-btn", classes="cycle")
         yield Button("Pre: off", id="pre-btn", classes="cycle")
-        yield Button("NB: off",  id="nb-btn",   classes="cycle")
-        yield Button("NR: off",  id="nr-btn",   classes="cycle")
+        yield Button("NB: off", id="nb-btn", classes="cycle")
+        yield Button("NR: off", id="nr-btn", classes="cycle")
         yield Button("Data: off", id="data-btn", classes="cycle")
 
     def render_data(
@@ -415,7 +430,7 @@ class RigCommandPanel(Widget):
             try:
                 self._freq_hz = int(float(freq))
                 mhz = f"{self._freq_hz / 1e6:.6f} MHz"
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 mhz = "—"
         else:
             mhz = "—"
@@ -500,8 +515,8 @@ class RigCommandPanel(Widget):
         btn_id = str(event.button.id)
         step_map = {
             "step-m10k": -10_000,
-            "step-m1k":  -1_000,
-            "step-p1k":  +1_000,
+            "step-m1k": -1_000,
+            "step-p1k": +1_000,
             "step-p10k": +10_000,
         }
         if btn_id in step_map and self._freq_hz is not None:
@@ -544,6 +559,7 @@ class RigCommandPanel(Widget):
 
 # ── Waterfall panel ─────────────────────────────────────────────────────────
 
+
 class WaterfallPanel(Static):
     """Equalizer-style waterfall — vertical bars per poll, newest column on the left."""
 
@@ -570,8 +586,8 @@ class WaterfallPanel(Static):
         if w == 0 or h == 0:
             self.update("")
             return
-        width  = max(1, w - 2)   # 1-char border each side
-        height = max(1, h - 2)   # 1-char border top and bottom
+        width = max(1, w - 2)  # 1-char border each side
+        height = max(1, h - 2)  # 1-char border top and bottom
 
         cols = list(self._history)[:width]
         while len(cols) < width:
@@ -579,14 +595,14 @@ class WaterfallPanel(Static):
 
         txt = Text(overflow="fold")
         for r in range(height):
-            rbf = height - 1 - r          # rows-from-bottom for this display row
+            rbf = height - 1 - r  # rows-from-bottom for this display row
             frac = rbf / max(height - 1, 1)
             for val in cols:
                 if val is None:
                     txt.append(" ")
                     continue
                 norm = max(0.0, min(1.0, (val + 54) / 114))
-                total_sub  = max(1, int(norm * height * 8))  # always at least 1 sub-block
+                total_sub = max(1, int(norm * height * 8))  # always at least 1 sub-block
                 sub_in_row = max(0, min(8, total_sub - rbf * 8))
                 char = self._VBLOCKS[sub_in_row]
                 # Classic equalizer gradient: green base → yellow mid → red peak
@@ -606,37 +622,37 @@ class WaterfallPanel(Static):
 
 # ── Command completion ──────────────────────────────────────────────────────
 
+
 class CommandSuggester(Suggester):
     """Inline ghost-text completion for rigtop commands."""
 
     _COMMANDS: ClassVar[dict[str, list[str]]] = {
-        "aprs":   ["on", "off"],
+        "aprs": ["on", "off"],
         "aprsis": ["on", "off"],
         "packet": ["on", "off"],
-        "wsjtx":  ["on", "off"],
-        "nmea":   ["on", "off"],
-        "gpsd":   ["on", "off"],
-        "civ":    ["on", "off"],
-        "data":   ["on", "off"],
-        "dw":     ["aprs"],
-        "freq":   [],
-        "help":   [],
+        "wsjtx": ["on", "off"],
+        "nmea": ["on", "off"],
+        "gpsd": ["on", "off"],
+        "civ": ["on", "off"],
+        "data": ["on", "off"],
+        "dw": ["aprs"],
+        "freq": [],
+        "help": [],
         "beacon": ["on", "off"],
-        "vol":    [],
-        "rf":     [],
-        "sql":    [],
-        "mic":    [],
-        "pwr":    [],
-        "att":    ["off", "6", "12", "18"],
-        "pre":    ["off", "on", "10", "20"],
-
-        "info":   [],
-        "mode":   ["USB", "LSB", "FM", "AM", "CW", "CWR", "PKTUSB", "PKTLSB", "PKTFM"],
-        "msg":    ["<CALL> <text>"],
-        "send":   ["<CALL> <text>"],
-        "q":      [],
-        "quit":   [],
-        "scan":   [],
+        "vol": [],
+        "rf": [],
+        "sql": [],
+        "mic": [],
+        "pwr": [],
+        "att": ["off", "6", "12", "18"],
+        "pre": ["off", "on", "10", "20"],
+        "info": [],
+        "mode": ["USB", "LSB", "FM", "AM", "CW", "CWR", "PKTUSB", "PKTLSB", "PKTFM"],
+        "msg": ["<CALL> <text>"],
+        "send": ["<CALL> <text>"],
+        "q": [],
+        "quit": [],
+        "scan": [],
     }
 
     def __init__(self) -> None:
@@ -669,6 +685,7 @@ class CommandSuggester(Suggester):
 
 
 # ── Textual widgets ─────────────────────────────────────────────────────────
+
 
 class AprsPanel(Static):
     """Bottom-left pane: live RF/APRS traffic from buffer."""
@@ -719,7 +736,7 @@ class RigPanel(Static):
         if freq:
             try:
                 mhz = f"{float(freq) / 1e6:.6f} MHz"
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 mhz = str(freq)
         else:
             mhz = "—"
@@ -761,8 +778,8 @@ class StationPanel(Static):
         location: dict | None = None,
         beacon_enabled: bool | None = None,
     ) -> None:
-        COL = 8   # label column width (including trailing space)
-        M   = " "  # left margin
+        COL = 8  # label column width (including trailing space)
+        M = " "  # left margin
 
         txt = Text()
 
@@ -779,9 +796,9 @@ class StationPanel(Static):
             txt.append(f"{grid}\n", style="bold green")
 
             if location:
-                cq      = location.get("cq", "?")
-                iaru    = location.get("iaru", "?")
-                cc      = location.get("cc", "")
+                cq = location.get("cq", "?")
+                iaru = location.get("iaru", "?")
+                cc = location.get("cc", "")
                 country = location.get("country", "")
                 lbl("Zones")
                 txt.append(f"CQ {cq}  ITU {iaru}\n", style="cyan")
@@ -874,31 +891,31 @@ class ConnectionBar(Static):
         self.update(txt)
 
     # Column widths: icon(1) name(14) kind(6) status(11) extra
-    _COL_NAME   = 14
-    _COL_KIND   =  8
+    _COL_NAME = 14
+    _COL_KIND = 8
     _COL_STATUS = 11
 
     def _fmt_conn(self, conn: dict) -> Text:
-        status  = conn.get("status", "")
-        label   = conn.get("label", "")
-        kind    = conn.get("kind", "")
+        status = conn.get("status", "")
+        label = conn.get("label", "")
+        kind = conn.get("kind", "")
         clients = conn.get("clients", [])
         address = conn.get("address", "")
 
         active = status in self._ACTIVE
-        icon   = "●" if active else "○"
+        icon = "●" if active else "○"
         colour = "green" if active else ("dim red" if status == "closed" else "dim")
 
         row = Text()
         row.append(f" {icon} ", style=colour)
         # Name column — pad to fixed width
-        name_col = label[:self._COL_NAME]
+        name_col = label[: self._COL_NAME]
         row.append(f"{name_col:<{self._COL_NAME}}", style="bold" if active else "dim")
         # Kind column
-        kind_col = (f"[{kind}]" if kind else "")[:self._COL_KIND]
+        kind_col = (f"[{kind}]" if kind else "")[: self._COL_KIND]
         row.append(f"   {kind_col:<{self._COL_KIND}}", style="dim")
         # Status column
-        status_col = status[:self._COL_STATUS]
+        status_col = status[: self._COL_STATUS]
         row.append(f"   {status_col:<{self._COL_STATUS}}", style=colour)
         # Extra: address / packet count / connected clients
         if address:
@@ -911,6 +928,7 @@ class ConnectionBar(Static):
 
 
 # ── Main Textual application ────────────────────────────────────────────────
+
 
 class RigtopApp(App[None]):
     """Textual rigtop dashboard."""
@@ -1104,8 +1122,7 @@ class RigtopApp(App[None]):
             yield Label("❯ ", id="cmd-prompt")
             yield Input(
                 placeholder=(
-                    "aprs | aprsis | packet | beacon on/off"
-                    "  •  nmea | gpsd | civ | wsjtx  •  q"
+                    "aprs | aprsis | packet | beacon on/off  •  nmea | gpsd | civ | wsjtx  •  q"
                 ),
                 id="cmd-input",
                 suggester=CommandSuggester(),
@@ -1220,6 +1237,7 @@ class RigtopApp(App[None]):
     async def _start_conn_refresh(self) -> None:
         """Periodically refresh the connection bar (slower than poll)."""
         import asyncio
+
         while True:
             await asyncio.sleep(2.0)
             self._refresh_conn_bar()
@@ -1302,8 +1320,7 @@ class RigtopApp(App[None]):
             if self._tx_start is None:
                 self._tx_start = mono
             tx_dur = mono - self._tx_start
-            if (not self._wd_tripped and self._watchdog
-                    and tx_dur >= self._watchdog.tx_timeout):
+            if not self._wd_tripped and self._watchdog and tx_dur >= self._watchdog.tx_timeout:
                 self._wd_tripped = True
                 self._update_title()
                 logger.critical("TX WATCHDOG fired after {:.0f}s", tx_dur)
@@ -1320,16 +1337,26 @@ class RigtopApp(App[None]):
 
         # Snapshot for :info
         self._last_info = {
-            "source": source_label, "freq": freq or "",
-            "mode": mode or "", "grid": grid, "gps": gps_src,
+            "source": source_label,
+            "freq": freq or "",
+            "mode": mode or "",
+            "grid": grid,
+            "gps": gps_src,
         }
 
         # Update widgets
         self.query_one(RigPanel).render_data(
-            freq, mode, passband, ptt, meters, self._rig_name, self._wd_tripped,
+            freq,
+            mode,
+            passband,
+            ptt,
+            meters,
+            self._rig_name,
+            self._wd_tripped,
         )
         aprsis_sinks = [
-            s for s in self._sinks
+            s
+            for s in self._sinks
             if type(s).__name__ == "AprsIsSink" and getattr(s, "enabled", True)
         ]
         if aprsis_sinks:
@@ -1338,7 +1365,12 @@ class RigtopApp(App[None]):
         else:
             beacon_enabled = None
         self.query_one(StationPanel).render_data(
-            pos, grid, gps_src, self._start_time, location, beacon_enabled,
+            pos,
+            grid,
+            gps_src,
+            self._start_time,
+            location,
+            beacon_enabled,
         )
 
         # Update traffic / messages panes when APRS or packet mode is active
@@ -1374,13 +1406,16 @@ class RigtopApp(App[None]):
             dw_log = self.query_one("#dw-log", RichLog)
             dw_log.styles.border = ("round", "green" if dw_now else "grey")
 
-
         # Also call send() on peer sinks (nmea, wsjtx, aprsis, etc.)
         if pos is not None:
             extras = {
-                "source_label": source_label, "gps_src": gps_src,
-                "freq": freq, "mode": mode, "passband": passband,
-                "ptt": ptt, "meters": meters,
+                "source_label": source_label,
+                "gps_src": gps_src,
+                "freq": freq,
+                "mode": mode,
+                "passband": passband,
+                "ptt": ptt,
+                "meters": meters,
             }
             for sink in self._sinks:
                 if not getattr(sink, "tui", False):
@@ -1405,32 +1440,32 @@ class RigtopApp(App[None]):
             return
         cmd, args = parts[0].lower(), parts[1:]
         dispatch = {
-            "aprs":   self._cmd_aprs,
+            "aprs": self._cmd_aprs,
             "aprsis": self._cmd_aprsis,
             "packet": self._cmd_packet,
-            "wsjtx":  self._cmd_wsjtx,
-            "nmea":   self._cmd_nmea,
-            "gpsd":   self._cmd_gpsd,
-            "civ":    self._cmd_civ,
-            "data":   self._cmd_data,
-            "dw":     self._cmd_dw,
+            "wsjtx": self._cmd_wsjtx,
+            "nmea": self._cmd_nmea,
+            "gpsd": self._cmd_gpsd,
+            "civ": self._cmd_civ,
+            "data": self._cmd_data,
+            "dw": self._cmd_dw,
             "beacon": self._cmd_beacon,
-            "vol":    self._cmd_vol,
-            "rf":     self._cmd_rf,
-            "sql":    self._cmd_sql,
-            "mic":    self._cmd_mic,
-            "pwr":    self._cmd_pwr,
-            "att":    self._cmd_att,
-            "pre":    self._cmd_pre,
-            "freq":   self._cmd_freq,
-            "mode":   self._cmd_mode,
-            "msg":    self._cmd_msg,
-            "send":   self._cmd_msg,
-            "info":   lambda _: self._cmd_info(),
-            "help":   lambda _: self._cmd_help(),
-            "scan":   lambda _: self._cmd_scan(),
-            "q":      lambda _: self.action_quit(),
-            "quit":   lambda _: self.action_quit(),
+            "vol": self._cmd_vol,
+            "rf": self._cmd_rf,
+            "sql": self._cmd_sql,
+            "mic": self._cmd_mic,
+            "pwr": self._cmd_pwr,
+            "att": self._cmd_att,
+            "pre": self._cmd_pre,
+            "freq": self._cmd_freq,
+            "mode": self._cmd_mode,
+            "msg": self._cmd_msg,
+            "send": self._cmd_msg,
+            "info": lambda _: self._cmd_info(),
+            "help": lambda _: self._cmd_help(),
+            "scan": lambda _: self._cmd_scan(),
+            "q": lambda _: self.action_quit(),
+            "quit": lambda _: self.action_quit(),
         }
         fn = dispatch.get(cmd)
         if fn:
@@ -1458,7 +1493,7 @@ class RigtopApp(App[None]):
             if self._rig is not None:
                 try:
                     self._saved_freq = int(self._rig.get_frequency() or 0) or None
-                except (ValueError, TypeError):
+                except ValueError, TypeError:
                     self._saved_freq = None
                 self._saved_mode = self._rig.get_mode()
             qsy: list[str] = []
@@ -1524,7 +1559,7 @@ class RigtopApp(App[None]):
                 if not self._packet_active:
                     try:
                         self._saved_freq = int(self._rig.get_frequency() or 0) or None
-                    except (ValueError, TypeError):
+                    except ValueError, TypeError:
                         self._saved_freq = None
                     self._saved_mode = self._rig.get_mode()
                 if self._rig.set_freq(int(cfg.freq * 1e6)):
@@ -1578,7 +1613,7 @@ class RigtopApp(App[None]):
         if not sinks:
             key = sink_type.replace("Sink", "").lower()
             self.notify(
-                f"{label} not in config — add [[sinks]] type = \"{key}\" to rigtop.toml",
+                f'{label} not in config — add [[sinks]] type = "{key}" to rigtop.toml',
                 severity="warning",
             )
             return
@@ -1613,8 +1648,10 @@ class RigtopApp(App[None]):
             self.notify("No nmea sink configured", severity="warning")
             return
         if not args:
+
             def _id(s) -> str:
                 return s.name or s.device or f"{s.host}:{s.port}"
+
             parts = [f"{_id(s)}={'ON' if self._sink_is_active(s) else 'OFF'}" for s in sinks]
             self.notify(f"NMEA: {', '.join(parts)}")
             return
@@ -1641,11 +1678,11 @@ class RigtopApp(App[None]):
         self._cmd_sink_toggle("CivProxySink", "CI-V", args)
 
     _DATA_MODE_MAP: ClassVar[dict[str, str]] = {
-        "FM": "PKTFM", "USB": "PKTUSB", "LSB": "PKTLSB",
+        "FM": "PKTFM",
+        "USB": "PKTUSB",
+        "LSB": "PKTLSB",
     }
-    _DATA_MODE_REVERSE: ClassVar[dict[str, str]] = {
-        v: k for k, v in _DATA_MODE_MAP.items()
-    }
+    _DATA_MODE_REVERSE: ClassVar[dict[str, str]] = {v: k for k, v in _DATA_MODE_MAP.items()}
 
     def _cmd_data(self, args: list[str]) -> None:
         if self._rig is None:
@@ -1696,7 +1733,8 @@ class RigtopApp(App[None]):
 
     def _cmd_beacon(self, args: list[str]) -> None:
         sinks = [
-            s for s in self._sinks
+            s
+            for s in self._sinks
             if type(s).__name__ == "AprsIsSink" and getattr(s, "enabled", True)
         ]
         if not sinks:
@@ -1824,11 +1862,11 @@ class RigtopApp(App[None]):
         try:
             val = float(raw)
             if val < 1_000:
-                hz = int(val * 1_000_000)   # MHz  e.g. 144.800
+                hz = int(val * 1_000_000)  # MHz  e.g. 144.800
             elif val < 1_000_000:
-                hz = int(val * 1_000)       # kHz  e.g. 144800
+                hz = int(val * 1_000)  # kHz  e.g. 144800
             else:
-                hz = int(val)               # Hz   e.g. 144800000
+                hz = int(val)  # Hz   e.g. 144800000
         except ValueError:
             self.notify(f"Invalid frequency: {raw}", severity="error")
             return
@@ -1850,7 +1888,7 @@ class RigtopApp(App[None]):
         if raw_mode == "SSB":
             try:
                 freq_hz = int(float(self._rig.get_frequency() or 0))
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 freq_hz = 0
             raw_mode = "LSB" if freq_hz < 10_000_000 else "USB"
         mode = _ALIASES.get(raw_mode, raw_mode)
@@ -1868,7 +1906,8 @@ class RigtopApp(App[None]):
             self.notify("Usage: msg <CALL> <text>", severity="warning")
             return
         sinks = [
-            s for s in self._sinks
+            s
+            for s in self._sinks
             if type(s).__name__ == "AprsIsSink" and getattr(s, "enabled", True)
         ]
         if not sinks:
@@ -1889,27 +1928,43 @@ class RigtopApp(App[None]):
         if i.get("freq"):
             try:
                 parts.insert(1, f"{float(i['freq']) / 1e6:.6f} MHz")
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 pass
         self.notify("  ".join(parts) if parts else "No info")
 
     def _cmd_help(self) -> None:
         cmds = (
-            "aprs [on|off]", "aprsis [on|off]", "packet [on|off]",
-            "beacon [on|off]", "wsjtx [on|off]",
-            "nmea [on|off] (NMEA sentences)", "gpsd [on|off] (gpsd server)",
-            "civ [on|off]", "data [on|off]", "dw [aprs]", "freq <MHz>",
-            "mode <MODE>", "send <CALL> <text>", "info", "scan", "q",
+            "aprs [on|off]",
+            "aprsis [on|off]",
+            "packet [on|off]",
+            "beacon [on|off]",
+            "wsjtx [on|off]",
+            "nmea [on|off] (NMEA sentences)",
+            "gpsd [on|off] (gpsd server)",
+            "civ [on|off]",
+            "data [on|off]",
+            "dw [aprs]",
+            "freq <MHz>",
+            "mode <MODE>",
+            "send <CALL> <text>",
+            "info",
+            "scan",
+            "q",
         )
         self.notify("  ".join(cmds), title="Commands", timeout=8)
 
     def _cmd_scan(self) -> None:
         def _run() -> None:
             from rigtop.discovery import format_results, scan_lan
+
             results = scan_lan()
             self.call_from_thread(
-                self.notify, format_results(results)[:200], "Scan", 10,
+                self.notify,
+                format_results(results)[:200],
+                "Scan",
+                10,
             )
+
         threading.Thread(target=_run, daemon=True).start()
         self.notify("Scanning LAN…")
 
@@ -1932,7 +1987,10 @@ class RigtopApp(App[None]):
                     lnchr.start()
             except (FileNotFoundError, RuntimeError) as e:
                 self.call_from_thread(
-                    self.notify, str(e), "Direwolf error", 6,
+                    self.notify,
+                    str(e),
+                    "Direwolf error",
+                    6,
                 )
 
         threading.Thread(target=_do, daemon=True).start()
@@ -1965,6 +2023,7 @@ class RigtopApp(App[None]):
 
 
 # ── Thin PositionSink stub (kept for sink registry) ─────────────────────────
+
 
 @register_sink("tui")
 class TuiSink(PositionSink):
