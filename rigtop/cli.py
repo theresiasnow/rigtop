@@ -47,11 +47,13 @@ class AppResources:
 # ---------------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
+    from rigtop import __version__
     parser = argparse.ArgumentParser(
         prog="rigtop",
         description="Ham radio rig dashboard — GPS, frequency, mode, meters.\n"
                     "Configure sinks and settings in rigtop.toml.",
     )
+    parser.add_argument("--version", action="version", version=f"rigtop {__version__}")
     parser.add_argument(
         "-c", "--config", type=Path, default=None,
         help="Path to TOML config file (auto-discovers rigtop.toml)",
