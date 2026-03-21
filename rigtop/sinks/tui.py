@@ -484,17 +484,20 @@ class RigCommandPanel(Widget):
 # ── Waterfall panel ─────────────────────────────────────────────────────────
 
 class WaterfallPanel(Static):
-    """Tiny scrolling signal-strength waterfall — newest row at top."""
+    """Equalizer-style waterfall — vertical bars per poll, newest column on the left."""
 
-    _WIDTH: ClassVar[int] = 48
-    _ROWS:  ClassVar[int] = 5
+    # 9-step vertical block characters (0 = empty … 8 = full)
+    _VBLOCKS: ClassVar[str] = " ▁▂▃▄▅▆▇█"
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._history: deque[float | None] = deque(maxlen=self._ROWS)
-        self.border_title = "Waterfall"
+        self._history: deque[float | None] = deque(maxlen=300)
+        self.border_title = "Signal"
 
     def on_mount(self) -> None:
+        self._redraw()
+
+    def on_resize(self) -> None:
         self._redraw()
 
     def push(self, strength: float | None) -> None:
@@ -502,39 +505,42 @@ class WaterfallPanel(Static):
         self._redraw()
 
     def _redraw(self) -> None:
-        rows = list(self._history)
-        while len(rows) < self._ROWS:
-            rows.append(None)
+        w, h = self.size
+        if w == 0 or h == 0:
+            self.update("")
+            return
+        width  = max(1, w - 2)   # 1-char border each side
+        height = max(1, h - 2)   # 1-char border top and bottom
+
+        cols = list(self._history)[:width]
+        while len(cols) < width:
+            cols.append(None)
+
         txt = Text(overflow="fold")
-        for i, val in enumerate(rows):
-            txt.append_text(self._row(val))
-            if i < len(rows) - 1:
+        for r in range(height):
+            rbf = height - 1 - r          # rows-from-bottom for this display row
+            frac = rbf / max(height - 1, 1)
+            for val in cols:
+                if val is None:
+                    txt.append(" ")
+                    continue
+                norm = max(0.0, min(1.0, (val + 54) / 114))
+                total_sub  = int(norm * height * 8)
+                sub_in_row = max(0, min(8, total_sub - rbf * 8))
+                char = self._VBLOCKS[sub_in_row]
+                # Classic equalizer gradient: green base → yellow mid → red peak
+                if sub_in_row == 0:
+                    style = ""
+                elif frac < 0.6:
+                    style = "green"
+                elif frac < 0.85:
+                    style = "yellow"
+                else:
+                    style = "bold red"
+                txt.append(char, style=style)
+            if r < height - 1:
                 txt.append("\n")
         self.update(txt)
-
-    @staticmethod
-    def _row(val: float | None) -> Text:
-        row = Text(overflow="fold")
-        if val is None:
-            row.append("░" * WaterfallPanel._WIDTH, style="dim")
-            return row
-        norm   = max(0.0, min(1.0, (val + 54) / 114))
-        filled = int(norm * WaterfallPanel._WIDTH)
-        if norm < 0.15:
-            colour, char = "dim blue", "░"
-        elif norm < 0.35:
-            colour, char = "cyan", "▒"
-        elif norm < 0.55:
-            colour, char = "green", "▒"
-        elif norm < 0.75:
-            colour, char = "yellow", "▓"
-        else:
-            colour, char = "red", "█"
-        row.append(char * filled, style=colour)
-        row.append("░" * (WaterfallPanel._WIDTH - filled), style="dim")
-        db_str = f" {val:+.0f}dB"
-        row.append(db_str, style="bold" if norm > 0.3 else "dim")
-        return row
 
 
 # ── Command completion ──────────────────────────────────────────────────────
@@ -901,9 +907,9 @@ class RigtopApp(App[None]):
         margin: 0 1;
     }
     WaterfallPanel {
-        height: 7;
+        height: 1fr;
         border: round $surface;
-        padding: 0 1;
+        padding: 0;
     }
     #aprs-row {
         height: 9;
@@ -1025,9 +1031,9 @@ class RigtopApp(App[None]):
         with Horizontal(id="top-row"):
             yield RigPanel(id="rig-panel")
             yield StationPanel(id="station-panel")
+        yield WaterfallPanel(id="waterfall")
         yield RigControlPanel(self._rig, id="ctrl-panel")
         yield RigCommandPanel(self._rig, id="cmd-panel")
-        yield WaterfallPanel(id="waterfall")
         yield ConnectionBar(id="conn-bar")
         with Horizontal(id="aprs-row"):
             yield AprsPanel(id="aprs-panel")
