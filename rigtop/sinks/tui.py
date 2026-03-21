@@ -681,7 +681,7 @@ class RigtopApp(App[None]):
         with Horizontal(id="cmd-bar"):
             yield Label("❯ ", id="cmd-prompt")
             yield Input(
-                placeholder="aprs on | send CALL text | freq | mode | help | q",
+                placeholder="aprs on | beacon on/off | send CALL text | freq | mode | help | q",
                 id="cmd-input",
                 suggester=CommandSuggester(),
             )
