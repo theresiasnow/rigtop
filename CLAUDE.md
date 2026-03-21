@@ -66,6 +66,25 @@ tests/
 - Zone lookups always go through `rigtop.zones.lookup(lat, lon)` (cached, offline)
 - Config is loaded once in `cli.main()` — pass values down, don't re-read TOML at runtime
 
+## Commit messages
+
+All commits **must** follow the [Conventional Commits](https://www.conventionalcommits.org/) format enforced by commitizen:
+
+```
+type(scope)?: short description
+```
+
+Valid types: `build`, `bump`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`
+
+Examples:
+```
+feat(tui): add waterfall panel
+fix(rigctld): handle None response from get_level
+ci: only build wheel on main branch
+```
+
+The CI `commit-lint` job runs `cz check` on every PR and will fail on non-conforming messages. This applies to all commits — including auto-generated ones (e.g. from Copilot suggestions). If a bad commit lands on the branch, rebase and amend before pushing.
+
 ## Running
 
 ```
