@@ -264,6 +264,7 @@ class CommandSuggester(Suggester):
         "packet": ["on", "off"],
         "wsjtx":  ["on", "off"],
         "nmea":   ["on", "off"],
+        "gpsd":   ["on", "off"],
         "civ":    ["on", "off"],
         "data":   ["on", "off"],
         "dw":     ["aprs"],
@@ -702,7 +703,10 @@ class RigtopApp(App[None]):
         with Horizontal(id="cmd-bar"):
             yield Label("❯ ", id="cmd-prompt")
             yield Input(
-                placeholder="aprs | packet | aprsis | wsjtx | nmea | civ | igate | beacon on/off  •  send CALL text  •  freq  •  mode  •  q",
+                placeholder=(
+                    "aprs | packet | aprsis | wsjtx | nmea | gpsd | civ | igate | beacon on/off"
+                    "  •  send CALL text  •  freq  •  mode  •  q"
+                ),
                 id="cmd-input",
                 suggester=CommandSuggester(),
             )
@@ -980,6 +984,7 @@ class RigtopApp(App[None]):
             "packet": self._cmd_packet,
             "wsjtx":  self._cmd_wsjtx,
             "nmea":   self._cmd_nmea,
+            "gpsd":   self._cmd_gpsd,
             "civ":    self._cmd_civ,
             "data":   self._cmd_data,
             "dw":     self._cmd_dw,
@@ -1171,7 +1176,10 @@ class RigtopApp(App[None]):
         self._cmd_sink_toggle("WsjtxSink", "WSJT-X", args)
 
     def _cmd_nmea(self, args: list[str]) -> None:
-        self._cmd_sink_toggle("NmeaSink", "NMEA", args)
+        self._cmd_sink_toggle("NmeaSink", "NMEA out", args)
+
+    def _cmd_gpsd(self, args: list[str]) -> None:
+        self._cmd_sink_toggle("GpsdSink", "gpsd", args)
 
     def _cmd_aprsis(self, args: list[str]) -> None:
         self._cmd_sink_toggle("AprsIsSink", "APRS-IS", args)
@@ -1345,9 +1353,10 @@ class RigtopApp(App[None]):
     def _cmd_help(self) -> None:
         cmds = (
             "aprs [on|off]", "aprsis [on|off]", "packet [on|off]",
-            "beacon [on|off]", "wsjtx [on|off]", "nmea [on|off]", "civ [on|off]",
-            "data [on|off]", "dw [aprs]", "freq <MHz>", "igate [on|off]",
-            "mode <MODE>", "send <CALL> <text>", "info", "scan", "q",
+            "beacon [on|off]", "wsjtx [on|off]",
+            "nmea [on|off] (NMEA sentences)", "gpsd [on|off] (gpsd server)",
+            "civ [on|off]", "data [on|off]", "dw [aprs]", "freq <MHz>",
+            "igate [on|off]", "mode <MODE>", "send <CALL> <text>", "info", "scan", "q",
         )
         self.notify("  ".join(cmds), title="Commands", timeout=8)
 
