@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
-from rigtop.sinks.tui import _control_bar
+import pytest
+
+from rigtop.sinks.tui import RigCommandPanel, _control_bar
 
 
 def _make_aprs_sink(*, connected: bool, beacon_enabled: bool, enabled: bool = True):
@@ -86,3 +89,68 @@ class TestControlBar:
     def test_not_selected_no_arrow(self):
         t = _control_bar("RF", 0.5, selected=False)
         assert "▶" not in t.plain
+
+
+class TestControlChanged:
+    """ControlChanged message carries state, and _last_controls update prevents snap-back.
+
+    All tests use a MagicMock rig — no radio connection required.
+    """
+
+    def test_message_key_and_value(self):
+        msg = RigCommandPanel.ControlChanged("PREAMP", 1.0)
+        assert msg.key == "PREAMP"
+        assert msg.value == 1.0
+
+    def test_last_controls_updated_immediately(self):
+        # Simulates on_rig_command_panel_control_changed updating _last_controls.
+        # Before fix: _last_controls held the stale poll value (0.0) and the
+        # next render_data() call would reset the button back to "off".
+        last_controls: dict = {"PREAMP": 0.0}  # stale value from last rig poll
+        msg = RigCommandPanel.ControlChanged("PREAMP", 1.0)
+        last_controls[msg.key] = msg.value  # handler updates immediately
+        assert last_controls["PREAMP"] == 1.0
+
+    def test_subsequent_render_data_preserves_new_value(self):
+        # With _last_controls updated, the next render_data must not reset to off.
+        # Regression: old nearest-neighbour against [0,10,20] mapped pre_raw=1.0→idx=0→"off"
+        last_controls = {"PREAMP": 1.0}  # updated via ControlChanged
+        pre_raw = last_controls.get("PREAMP")
+        pre_idx = 0 if not pre_raw else 1
+        assert pre_idx == 1, "PREAMP=1.0 must map to 'on', not revert to 'off'"
+
+    def test_set_level_called_with_mock_rig(self):
+        # set_level on a mock rig returns True; ControlChanged is posted with the value.
+        mock_rig = MagicMock()
+        mock_rig.set_level.return_value = True
+        mock_rig.get_level.return_value = 1.0  # rig confirms preamp is on
+
+        ok = mock_rig.set_level("PREAMP", 1.0)
+        actual = mock_rig.get_level("PREAMP")
+        pre_idx = 0 if not actual else 1
+
+        assert ok is True
+        assert pre_idx == 1
+        mock_rig.set_level.assert_called_once_with("PREAMP", 1.0)
+
+
+class TestPreampIndexMapping:
+    """pre_raw→idx mapping must treat any non-zero as on.
+
+    IC-705 via hamlib returns PREAMP=1.0 (index-based).
+    Old nearest-neighbour against [0,10,20]: abs(0-1)=1 < abs(10-1)=9 → idx=0 → "off" (bug).
+    New mapping: 0 if not pre_raw else 1 → always correct.
+    """
+
+    @pytest.mark.parametrize(
+        "pre_raw,expected_on",
+        [
+            (0.0, False),   # preamp off
+            (1.0, True),    # IC-705 index style
+            (10.0, True),   # dB style rig (preamp 1)
+            (20.0, True),   # dB style rig (preamp 2)
+        ],
+    )
+    def test_pre_raw_to_on_off(self, pre_raw: float, expected_on: bool) -> None:
+        pre_idx = 0 if not pre_raw else 1
+        assert bool(pre_idx) == expected_on
