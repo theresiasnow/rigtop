@@ -423,6 +423,11 @@ rigtop/
     aprsis.py              AprsIsSink — APRS-IS beacon + receiver
 ```
 
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for the phased development plan, feature ideas, and
+contribution guidance.
+
 ## License
 
 MIT
