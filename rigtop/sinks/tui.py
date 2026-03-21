@@ -269,6 +269,7 @@ class CommandSuggester(Suggester):
         "dw":     ["aprs"],
         "freq":   [],
         "help":   [],
+        "beacon": ["on", "off"],
         "igate":  ["on", "off"],
         "info":   [],
         "mode":   ["USB", "LSB", "FM", "AM", "CW", "CWR", "PKTUSB", "PKTLSB", "PKTFM"],
@@ -955,6 +956,7 @@ class RigtopApp(App[None]):
             "civ":    self._cmd_civ,
             "data":   self._cmd_data,
             "dw":     self._cmd_dw,
+            "beacon": self._cmd_beacon,
             "igate":  self._cmd_igate,
             "freq":   self._cmd_freq,
             "mode":   self._cmd_mode,
@@ -1006,6 +1008,8 @@ class RigtopApp(App[None]):
             for s in sinks:
                 if not s.connected:
                     s.start()
+                if self._beacon_disabled:
+                    s._beacon_enabled = False
             self._aprs_active = True
             self._update_title()
             self.query_one("#aprs-row").display = True
@@ -1202,6 +1206,26 @@ class RigtopApp(App[None]):
             return
         self._start_direwolf(profile)
 
+    def _cmd_beacon(self, args: list[str]) -> None:
+        sinks = [s for s in self._sinks if type(s).__name__ == "AprsIsSink"]
+        if not sinks:
+            self.notify("No APRS-IS sink configured", severity="warning")
+            return
+        sink = sinks[0]
+        if not args:
+            state = "ON" if sink._beacon_enabled else "OFF"
+            self.notify(f"Beacon: {state}  (interval {sink._interval}s)")
+            return
+        action = args[0].lower()
+        if action == "on":
+            sink._beacon_enabled = True
+            self.notify("Beacon ON — position will be sent to APRS-IS", title="Beacon")
+        elif action == "off":
+            sink._beacon_enabled = False
+            self.notify("Beacon OFF — position not sent to APRS-IS", title="Beacon")
+        else:
+            self.notify("Usage: beacon [on|off]", severity="warning")
+
     def _cmd_igate(self, args: list[str]) -> None:
         sinks = [s for s in self._sinks if type(s).__name__ == "AprsIsSink"]
         if not sinks:
@@ -1293,7 +1317,7 @@ class RigtopApp(App[None]):
     def _cmd_help(self) -> None:
         cmds = (
             "aprs [on|off]", "aprsis [on|off]", "packet [on|off]",
-            "wsjtx [on|off]", "nmea [on|off]", "civ [on|off]",
+            "beacon [on|off]", "wsjtx [on|off]", "nmea [on|off]", "civ [on|off]",
             "data [on|off]", "dw [aprs]", "freq <MHz>", "igate [on|off]",
             "mode <MODE>", "send <CALL> <text>", "info", "scan", "q",
         )
