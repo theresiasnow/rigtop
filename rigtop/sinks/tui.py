@@ -393,7 +393,7 @@ class RigCommandPanel(Widget):
         "PKTLSB",
     ]
     _ATT_STEPS: ClassVar[list[int]] = [0, 6, 12, 18]
-    _PRE_STEPS: ClassVar[list[int]] = [0, 10, 20]
+    _PRE_STEPS: ClassVar[list[int]] = [0, 10]  # off / on (hamlib expects 0 or dB value)
     _DATA_ON: ClassVar[dict[str, str]] = {"FM": "PKTFM", "USB": "PKTUSB", "LSB": "PKTLSB"}
     _DATA_OFF: ClassVar[dict[str, str]] = {"PKTFM": "FM", "PKTUSB": "USB", "PKTLSB": "LSB"}
 
@@ -479,10 +479,9 @@ class RigCommandPanel(Widget):
 
         pre_raw = controls.get("PREAMP")
         if pre_raw is not None:
-            self._pre_idx = min(
-                range(len(self._PRE_STEPS)),
-                key=lambda i: abs(self._PRE_STEPS[i] - pre_raw),
-            )
+            # Treat any non-zero value as "on" — rigs may return a dB value (10)
+            # or an index (1), but both are > 0 when the preamp is active.
+            self._pre_idx = 0 if not pre_raw else 1
             try:
                 self.query_one("#pre-btn", Button).label = self._pre_label()
             except Exception:
@@ -509,8 +508,7 @@ class RigCommandPanel(Widget):
         return f"ATT: {v} dB" if v else "ATT: off"
 
     def _pre_label(self) -> str:
-        v = self._PRE_STEPS[self._pre_idx]
-        return f"Pre: {v} dB" if v else "Pre: off"
+        return "Pre: on" if self._pre_idx else "Pre: off"
 
     def _nb_label(self) -> str:
         return "NB: on" if self._nb_on else "NB: off"
@@ -536,6 +534,14 @@ class RigCommandPanel(Widget):
             self._att_idx = (self._att_idx + 1) % len(self._ATT_STEPS)
             val = float(self._ATT_STEPS[self._att_idx])
             if self._rig.set_level("ATT", val):
+                # Read back to confirm and get the actual ATT value
+                actual = self._rig.get_level("ATT")
+                if actual is not None:
+                    self._att_idx = min(
+                        range(len(self._ATT_STEPS)),
+                        key=lambda i: abs(self._ATT_STEPS[i] - actual),
+                    )
+                    val = actual
                 self.query_one("#att-btn", Button).label = self._att_label()
                 self.post_message(self.ControlChanged("ATT", val))
             else:
@@ -544,6 +550,11 @@ class RigCommandPanel(Widget):
             self._pre_idx = (self._pre_idx + 1) % len(self._PRE_STEPS)
             val = float(self._PRE_STEPS[self._pre_idx])
             if self._rig.set_level("PREAMP", val):
+                # Read back to verify the rig actually accepted the change
+                actual = self._rig.get_level("PREAMP")
+                if actual is not None:
+                    self._pre_idx = 0 if not actual else 1
+                    val = actual
                 self.query_one("#pre-btn", Button).label = self._pre_label()
                 self.post_message(self.ControlChanged("PREAMP", val))
             else:
