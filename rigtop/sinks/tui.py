@@ -17,7 +17,8 @@ from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.reactive import reactive
 from textual.suggester import Suggester
-from textual.widgets import Header, Input, Label, RichLog, Static
+from textual.widget import Widget
+from textual.widgets import Button, Header, Input, Label, RichLog, Select, Static
 from textual.worker import get_current_worker
 
 from rigtop.geo import format_position, maidenhead
@@ -255,7 +256,7 @@ def _meter_bar(name: str, value: float, width: int = 18) -> Text:
 
 # ── Rig control rendering ────────────────────────────────────────────────────
 
-#: Continuous levels (0.0-1.0) shown as percentage bars
+#: Continuous levels (0.0-1.0) shown as percentage bars in RigControlPanel
 _CTRL_PCT: list[tuple[str, str]] = [
     ("AF",      "Vol"),
     ("RF",      "RF"),
@@ -263,15 +264,9 @@ _CTRL_PCT: list[tuple[str, str]] = [
     ("MICGAIN", "Mic"),
     ("RFPOWER", "Pwr"),
 ]
-#: Stepped dB levels — rendered as "X dB" or "off"
-_CTRL_DB: list[tuple[str, str]] = [
-    ("ATT",    "ATT"),
-    ("PREAMP", "Pre"),
-]
-_CTRL_ALL: list[str] = [k for k, _ in _CTRL_PCT] + [k for k, _ in _CTRL_DB]
+#: All levels polled from the rig (incl. ATT/PREAMP for RigCommandPanel)
+_CTRL_ALL: list[str] = [k for k, _ in _CTRL_PCT] + ["ATT", "PREAMP"]
 
-_ATT_STEPS = [0, 6, 12, 18]
-_PRE_STEPS = [0, 10, 20]
 _CTRL_STEP = 0.05   # 5 % per arrow keypress
 
 
@@ -289,21 +284,21 @@ def _control_bar(label: str, value: float, width: int = 16, selected: bool = Fal
 
 
 class RigControlPanel(Static, can_focus=True):
-    """Interactive rig control pane — Tab to focus, arrows to navigate + adjust."""
+    """Horizontal continuous-level bars — Tab to focus, ◄► select control, ▲▼ adjust."""
 
     BINDINGS: ClassVar[list] = [
-        Binding("up",     "prev_ctrl", "Prev",   show=False),
-        Binding("down",   "next_ctrl", "Next",   show=False),
-        Binding("left",   "decrease",  "−5%",    show=False),
-        Binding("right",  "increase",  "+5%",    show=False),
-        Binding("escape", "blur_pane", "Done",   show=False),
+        Binding("left",   "prev_ctrl",  "Prev",  show=False),
+        Binding("right",  "next_ctrl",  "Next",  show=False),
+        Binding("up",     "increase",   "+5%",   show=False),
+        Binding("down",   "decrease",   "-5%",   show=False),
+        Binding("escape", "blur_pane",  "Done",  show=False),
     ]
 
     def __init__(self, rig, **kwargs) -> None:
         super().__init__(**kwargs)
         self._rig = rig
         self._controls: dict[str, float | None] = {}
-        self._available: list[str] = []   # keys with non-None values, in order
+        self._available: list[str] = []
         self._sel: int = 0
 
     def update_rig(self, rig) -> None:
@@ -311,7 +306,7 @@ class RigControlPanel(Static, can_focus=True):
 
     def render_data(self, controls: dict[str, float | None]) -> None:
         self._controls = controls
-        self._available = [k for k in _CTRL_ALL if controls.get(k) is not None]
+        self._available = [k for k, _ in _CTRL_PCT if controls.get(k) is not None]
         if self._sel >= len(self._available):
             self._sel = max(0, len(self._available) - 1)
         self._redraw()
@@ -319,29 +314,21 @@ class RigControlPanel(Static, can_focus=True):
     def _redraw(self) -> None:
         sel_key = self._available[self._sel] if self._available and self.has_focus else None
         txt = Text()
-        # Continuous bars
+        parts: list[Text] = []
         for key, label in _CTRL_PCT:
             val = self._controls.get(key)
             if val is None:
                 continue
-            txt.append_text(_control_bar(label, val, selected=(sel_key == key)))
-            txt.append("\n")
-        # Stepped dB controls on one line
-        db_parts: list[str] = []
-        for key, label in _CTRL_DB:
-            val = self._controls.get(key)
-            if val is None:
-                continue
-            arrow = "▶ " if sel_key == key else "  "
-            if val > 0:
-                db_parts.append(f"{arrow}{label}  {int(val):2d} dB")
-            else:
-                db_parts.append(f"{arrow}{label}  off    ")
-        if db_parts:
-            txt.append(" " + "      ".join(db_parts) + "\n", style="bold")
-        if not self._available:
-            txt.append(" No control data\n", style="dim")
-        hint = "  [arrows to adjust, Esc to exit]" if self.has_focus else ""
+            parts.append(_control_bar(label, val, width=8, selected=(sel_key == key)))
+        if parts:
+            txt.append(" ")
+            for i, part in enumerate(parts):
+                txt.append_text(part)
+                if i < len(parts) - 1:
+                    txt.append("   ")
+        else:
+            txt.append(" No control data", style="dim")
+        hint = "  [◄► select · ▲▼ adjust · Esc]" if self.has_focus else ""
         self.border_title = f"Controls{hint}"
         self.update(txt)
 
@@ -377,19 +364,121 @@ class RigControlPanel(Static, can_focus=True):
         current = self._controls.get(key)
         if current is None:
             return
-        if key == "ATT":
-            steps = _ATT_STEPS
-            idx = min(range(len(steps)), key=lambda i: abs(steps[i] - current))
-            new_val = float(steps[max(0, min(len(steps) - 1, idx + direction))])
-        elif key == "PREAMP":
-            steps = _PRE_STEPS
-            idx = min(range(len(steps)), key=lambda i: abs(steps[i] - current))
-            new_val = float(steps[max(0, min(len(steps) - 1, idx + direction))])
-        else:
-            new_val = round(max(0.0, min(1.0, current + direction * _CTRL_STEP)), 2)
+        new_val = round(max(0.0, min(1.0, current + direction * _CTRL_STEP)), 2)
         if self._rig.set_level(key, new_val):
             self._controls[key] = new_val
             self._redraw()
+
+
+class RigCommandPanel(Widget):
+    """Freq step buttons, mode dropdown, ATT and preamp cycle buttons."""
+
+    _MODES: ClassVar[list[str]] = [
+        "FM", "USB", "LSB", "AM", "CW", "CWR", "PKTFM", "PKTUSB", "PKTLSB",
+    ]
+    _ATT_STEPS: ClassVar[list[int]] = [0, 6, 12, 18]
+    _PRE_STEPS: ClassVar[list[int]] = [0, 10, 20]
+
+    def __init__(self, rig, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._rig = rig
+        self._freq_hz: int | None = None
+        self._att_idx: int = 0
+        self._pre_idx: int = 0
+        self._updating = False
+
+    def compose(self) -> ComposeResult:
+        yield Button("◄◄", id="step-m10k", classes="step")
+        yield Button("◄",  id="step-m1k",  classes="step")
+        yield Label("—", id="freq-lbl")
+        yield Button("►",  id="step-p1k",  classes="step")
+        yield Button("►►", id="step-p10k", classes="step")
+        yield Select([(m, m) for m in self._MODES], id="mode-sel")
+        yield Button("ATT: off", id="att-btn", classes="cycle")
+        yield Button("Pre: off", id="pre-btn", classes="cycle")
+
+    def render_data(
+        self,
+        freq: str | None,
+        mode: str | None,
+        controls: dict[str, float | None],
+    ) -> None:
+        if freq:
+            try:
+                self._freq_hz = int(float(freq))
+                mhz = f"{self._freq_hz / 1e6:.6f} MHz"
+            except (ValueError, TypeError):
+                mhz = "—"
+        else:
+            mhz = "—"
+        try:
+            self.query_one("#freq-lbl", Label).update(mhz)
+        except Exception:
+            return  # not yet mounted
+
+        self._updating = True
+        try:
+            if mode and mode in self._MODES:
+                self.query_one("#mode-sel", Select).value = mode
+        except Exception:
+            pass
+        finally:
+            self._updating = False
+
+        att_raw = controls.get("ATT")
+        if att_raw is not None:
+            self._att_idx = min(
+                range(len(self._ATT_STEPS)),
+                key=lambda i: abs(self._ATT_STEPS[i] - att_raw),
+            )
+            try:
+                self.query_one("#att-btn", Button).label = self._att_label()
+            except Exception:
+                pass
+
+        pre_raw = controls.get("PREAMP")
+        if pre_raw is not None:
+            self._pre_idx = min(
+                range(len(self._PRE_STEPS)),
+                key=lambda i: abs(self._PRE_STEPS[i] - pre_raw),
+            )
+            try:
+                self.query_one("#pre-btn", Button).label = self._pre_label()
+            except Exception:
+                pass
+
+    def _att_label(self) -> str:
+        v = self._ATT_STEPS[self._att_idx]
+        return f"ATT: {v} dB" if v else "ATT: off"
+
+    def _pre_label(self) -> str:
+        v = self._PRE_STEPS[self._pre_idx]
+        return f"Pre: {v} dB" if v else "Pre: off"
+
+    @on(Button.Pressed)
+    def _handle_button(self, event: Button.Pressed) -> None:
+        btn_id = str(event.button.id)
+        step_map = {
+            "step-m10k": -10_000,
+            "step-m1k":  -1_000,
+            "step-p1k":  +1_000,
+            "step-p10k": +10_000,
+        }
+        if btn_id in step_map and self._freq_hz is not None:
+            self._rig.set_freq(self._freq_hz + step_map[btn_id])
+        elif btn_id == "att-btn":
+            self._att_idx = (self._att_idx + 1) % len(self._ATT_STEPS)
+            if self._rig.set_level("ATT", float(self._ATT_STEPS[self._att_idx])):
+                self.query_one("#att-btn", Button).label = self._att_label()
+        elif btn_id == "pre-btn":
+            self._pre_idx = (self._pre_idx + 1) % len(self._PRE_STEPS)
+            if self._rig.set_level("PREAMP", float(self._PRE_STEPS[self._pre_idx])):
+                self.query_one("#pre-btn", Button).label = self._pre_label()
+
+    @on(Select.Changed, "#mode-sel")
+    def _mode_changed(self, event: Select.Changed) -> None:
+        if not self._updating and event.value is not Select.BLANK:
+            self._rig.set_mode(str(event.value))
 
 
 # ── Command completion ──────────────────────────────────────────────────────
@@ -726,12 +815,34 @@ class RigtopApp(App[None]):
         overflow-y: auto;
     }
     RigControlPanel {
-        height: 8;
+        height: 3;
         border: round $surface;
         padding: 0 1;
     }
     RigControlPanel:focus {
         border: round $accent;
+    }
+    RigCommandPanel {
+        height: 5;
+        border: round $surface;
+        layout: horizontal;
+        align: center middle;
+        padding: 0 1;
+    }
+    RigCommandPanel Button {
+        height: 1;
+        min-width: 6;
+        border: none;
+        margin: 0 1;
+    }
+    RigCommandPanel #freq-lbl {
+        width: 1fr;
+        content-align: center middle;
+        text-style: bold;
+    }
+    RigCommandPanel Select {
+        width: 16;
+        margin: 0 1;
     }
     #aprs-row {
         height: 9;
@@ -854,6 +965,7 @@ class RigtopApp(App[None]):
             yield RigPanel(id="rig-panel")
             yield StationPanel(id="station-panel")
         yield RigControlPanel(self._rig, id="ctrl-panel")
+        yield RigCommandPanel(self._rig, id="cmd-panel")
         yield ConnectionBar(id="conn-bar")
         with Horizontal(id="aprs-row"):
             yield AprsPanel(id="aprs-panel")
@@ -1105,6 +1217,7 @@ class RigtopApp(App[None]):
         if "controls" in data:
             self._last_controls = data["controls"]
         self.query_one(RigControlPanel).render_data(self._last_controls)
+        self.query_one(RigCommandPanel).render_data(freq, mode, self._last_controls)
 
         # Update IS badge
         aprs_is_connected = any(
@@ -1530,6 +1643,9 @@ class RigtopApp(App[None]):
             self.notify(f"ATT: {db} dB" if db else "ATT: off")
             self._last_controls["ATT"] = float(db)
             self.query_one(RigControlPanel).render_data(self._last_controls)
+            freq = self._last_info.get("freq")
+            mode = self._last_info.get("mode")
+            self.query_one(RigCommandPanel).render_data(freq, mode, self._last_controls)
         else:
             self.notify("ATT: set failed", severity="error")
 
@@ -1553,6 +1669,9 @@ class RigtopApp(App[None]):
             self.notify(f"Pre: {db} dB" if db else "Pre: off")
             self._last_controls["PREAMP"] = float(db)
             self.query_one(RigControlPanel).render_data(self._last_controls)
+            freq = self._last_info.get("freq")
+            mode = self._last_info.get("mode")
+            self.query_one(RigCommandPanel).render_data(freq, mode, self._last_controls)
         else:
             self.notify("Pre: set failed", severity="error")
 
