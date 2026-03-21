@@ -253,6 +253,145 @@ def _meter_bar(name: str, value: float, width: int = 18) -> Text:
     return line
 
 
+# ── Rig control rendering ────────────────────────────────────────────────────
+
+#: Continuous levels (0.0-1.0) shown as percentage bars
+_CTRL_PCT: list[tuple[str, str]] = [
+    ("AF",      "Vol"),
+    ("RF",      "RF"),
+    ("SQL",     "SQL"),
+    ("MICGAIN", "Mic"),
+    ("RFPOWER", "Pwr"),
+]
+#: Stepped dB levels — rendered as "X dB" or "off"
+_CTRL_DB: list[tuple[str, str]] = [
+    ("ATT",    "ATT"),
+    ("PREAMP", "Pre"),
+]
+_CTRL_ALL: list[str] = [k for k, _ in _CTRL_PCT] + [k for k, _ in _CTRL_DB]
+
+_ATT_STEPS = [0, 6, 12, 18]
+_PRE_STEPS = [0, 10, 20]
+_CTRL_STEP = 0.05   # 5 % per arrow keypress
+
+
+def _control_bar(label: str, value: float, width: int = 16, selected: bool = False) -> Text:
+    norm  = max(0.0, min(1.0, value))
+    filled = int(norm * width)
+    bar   = "█" * filled + "░" * (width - filled)
+    pct   = f"{value * 100:.0f}%"
+    line  = Text()
+    arrow = "▶ " if selected else "  "
+    line.append(f" {arrow}{label:<5}", style="bold cyan" if selected else "bold")
+    line.append(bar, style="bold cyan" if selected else "cyan")
+    line.append(f"  {pct:>4}", style="bold" if selected else "")
+    return line
+
+
+class RigControlPanel(Static, can_focus=True):
+    """Interactive rig control pane — Tab to focus, arrows to navigate + adjust."""
+
+    BINDINGS: ClassVar[list] = [
+        Binding("up",     "prev_ctrl", "Prev",   show=False),
+        Binding("down",   "next_ctrl", "Next",   show=False),
+        Binding("left",   "decrease",  "−5%",    show=False),
+        Binding("right",  "increase",  "+5%",    show=False),
+        Binding("escape", "blur_pane", "Done",   show=False),
+    ]
+
+    def __init__(self, rig, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._rig = rig
+        self._controls: dict[str, float | None] = {}
+        self._available: list[str] = []   # keys with non-None values, in order
+        self._sel: int = 0
+
+    def update_rig(self, rig) -> None:
+        self._rig = rig
+
+    def render_data(self, controls: dict[str, float | None]) -> None:
+        self._controls = controls
+        self._available = [k for k in _CTRL_ALL if controls.get(k) is not None]
+        if self._sel >= len(self._available):
+            self._sel = max(0, len(self._available) - 1)
+        self._redraw()
+
+    def _redraw(self) -> None:
+        sel_key = self._available[self._sel] if self._available and self.has_focus else None
+        txt = Text()
+        # Continuous bars
+        for key, label in _CTRL_PCT:
+            val = self._controls.get(key)
+            if val is None:
+                continue
+            txt.append_text(_control_bar(label, val, selected=(sel_key == key)))
+            txt.append("\n")
+        # Stepped dB controls on one line
+        db_parts: list[str] = []
+        for key, label in _CTRL_DB:
+            val = self._controls.get(key)
+            if val is None:
+                continue
+            arrow = "▶ " if sel_key == key else "  "
+            if val > 0:
+                db_parts.append(f"{arrow}{label}  {int(val):2d} dB")
+            else:
+                db_parts.append(f"{arrow}{label}  off    ")
+        if db_parts:
+            txt.append(" " + "      ".join(db_parts) + "\n", style="bold")
+        if not self._available:
+            txt.append(" No control data\n", style="dim")
+        hint = "  [arrows to adjust, Esc to exit]" if self.has_focus else ""
+        self.border_title = f"Controls{hint}"
+        self.update(txt)
+
+    def on_focus(self) -> None:
+        self._redraw()
+
+    def on_blur(self) -> None:
+        self._redraw()
+
+    def action_prev_ctrl(self) -> None:
+        if self._available:
+            self._sel = (self._sel - 1) % len(self._available)
+            self._redraw()
+
+    def action_next_ctrl(self) -> None:
+        if self._available:
+            self._sel = (self._sel + 1) % len(self._available)
+            self._redraw()
+
+    def action_increase(self) -> None:
+        self._adjust(+1)
+
+    def action_decrease(self) -> None:
+        self._adjust(-1)
+
+    def action_blur_pane(self) -> None:
+        self.blur()
+
+    def _adjust(self, direction: int) -> None:
+        if not self._available:
+            return
+        key = self._available[self._sel]
+        current = self._controls.get(key)
+        if current is None:
+            return
+        if key == "ATT":
+            steps = _ATT_STEPS
+            idx = min(range(len(steps)), key=lambda i: abs(steps[i] - current))
+            new_val = float(steps[max(0, min(len(steps) - 1, idx + direction))])
+        elif key == "PREAMP":
+            steps = _PRE_STEPS
+            idx = min(range(len(steps)), key=lambda i: abs(steps[i] - current))
+            new_val = float(steps[max(0, min(len(steps) - 1, idx + direction))])
+        else:
+            new_val = round(max(0.0, min(1.0, current + direction * _CTRL_STEP)), 2)
+        if self._rig.set_level(key, new_val):
+            self._controls[key] = new_val
+            self._redraw()
+
+
 # ── Command completion ──────────────────────────────────────────────────────
 
 class CommandSuggester(Suggester):
@@ -271,6 +410,13 @@ class CommandSuggester(Suggester):
         "freq":   [],
         "help":   [],
         "beacon": ["on", "off"],
+        "vol":    [],
+        "rf":     [],
+        "sql":    [],
+        "mic":    [],
+        "pwr":    [],
+        "att":    ["off", "6", "12", "18"],
+        "pre":    ["off", "on", "10", "20"],
 
         "info":   [],
         "mode":   ["USB", "LSB", "FM", "AM", "CW", "CWR", "PKTUSB", "PKTLSB", "PKTFM"],
@@ -579,6 +725,14 @@ class RigtopApp(App[None]):
         height: 100%;
         overflow-y: auto;
     }
+    RigControlPanel {
+        height: 8;
+        border: round $surface;
+        padding: 0 1;
+    }
+    RigControlPanel:focus {
+        border: round $accent;
+    }
     #aprs-row {
         height: 9;
         display: none;
@@ -689,6 +843,8 @@ class RigtopApp(App[None]):
         self._saved_mode: str | None = None
         self._last_info: dict = {}
         self._dw_active_config: str = ""  # track last-seen config name
+        self._last_controls: dict[str, float | None] = {}
+        self._ctrl_poll_n: int = 0
 
     # ── Layout ──────────────────────────────────────────────────────────────
 
@@ -697,6 +853,7 @@ class RigtopApp(App[None]):
         with Horizontal(id="top-row"):
             yield RigPanel(id="rig-panel")
             yield StationPanel(id="station-panel")
+        yield RigControlPanel(self._rig, id="ctrl-panel")
         yield ConnectionBar(id="conn-bar")
         with Horizontal(id="aprs-row"):
             yield AprsPanel(id="aprs-panel")
@@ -706,8 +863,8 @@ class RigtopApp(App[None]):
             yield Label("❯ ", id="cmd-prompt")
             yield Input(
                 placeholder=(
-                    "aprs | packet | aprsis | wsjtx | nmea | gpsd | civ | beacon on/off"
-                    "  •  send CALL text  •  freq  •  mode  •  q"
+                    "vol | rf | sql | mic | pwr | att | pre"
+                    "  •  freq | mode  •  aprs | aprsis | beacon on/off  •  q"
                 ),
                 id="cmd-input",
                 suggester=CommandSuggester(),
@@ -866,6 +1023,11 @@ class RigtopApp(App[None]):
                 m["RFPOWER"] = rfpower
             result["meters"] = m
 
+        # Read control levels every 5th poll (they change rarely)
+        self._ctrl_poll_n = (self._ctrl_poll_n + 1) % 5
+        if self._ctrl_poll_n == 0:
+            result["controls"] = {lvl: rig.get_level(lvl) for lvl in _CTRL_ALL}
+
         return result
 
     def _apply_data(self, data: dict) -> None:
@@ -920,7 +1082,10 @@ class RigtopApp(App[None]):
         self.query_one(RigPanel).render_data(
             freq, mode, passband, ptt, meters, self._rig_name, self._wd_tripped,
         )
-        aprsis_sinks = [s for s in self._sinks if type(s).__name__ == "AprsIsSink" and getattr(s, "enabled", True)]
+        aprsis_sinks = [
+            s for s in self._sinks
+            if type(s).__name__ == "AprsIsSink" and getattr(s, "enabled", True)
+        ]
         if aprsis_sinks:
             s = aprsis_sinks[0]
             beacon_enabled = s._beacon_enabled and s.connected
@@ -935,6 +1100,11 @@ class RigtopApp(App[None]):
             mode_label = "APRS Traffic" if self._aprs_active else "Packet Traffic"
             self.query_one(AprsPanel).render_data(self._aprs_buffer, title=mode_label)
             self.query_one(MsgPanel).render_data(self._msg_buffer)
+
+        # Update rig control panel
+        if "controls" in data:
+            self._last_controls = data["controls"]
+        self.query_one(RigControlPanel).render_data(self._last_controls)
 
         # Update IS badge
         aprs_is_connected = any(
@@ -996,6 +1166,13 @@ class RigtopApp(App[None]):
             "data":   self._cmd_data,
             "dw":     self._cmd_dw,
             "beacon": self._cmd_beacon,
+            "vol":    self._cmd_vol,
+            "rf":     self._cmd_rf,
+            "sql":    self._cmd_sql,
+            "mic":    self._cmd_mic,
+            "pwr":    self._cmd_pwr,
+            "att":    self._cmd_att,
+            "pre":    self._cmd_pre,
             "freq":   self._cmd_freq,
             "mode":   self._cmd_mode,
             "msg":    self._cmd_msg,
@@ -1269,7 +1446,10 @@ class RigtopApp(App[None]):
         self._start_direwolf(profile)
 
     def _cmd_beacon(self, args: list[str]) -> None:
-        sinks = [s for s in self._sinks if type(s).__name__ == "AprsIsSink" and getattr(s, "enabled", True)]
+        sinks = [
+            s for s in self._sinks
+            if type(s).__name__ == "AprsIsSink" and getattr(s, "enabled", True)
+        ]
         if not sinks:
             self.notify("No APRS-IS sink configured", severity="warning")
             return
@@ -1288,6 +1468,93 @@ class RigtopApp(App[None]):
             self.notify("Beacon OFF — position not sent to APRS-IS", title="Beacon")
         else:
             self.notify("Usage: beacon [on|off]", severity="warning")
+
+    # ── Rig control commands ──────────────────────────────────────────────────
+
+    def _set_pct_level(self, level: str, label: str, args: list[str]) -> None:
+        """Helper for 0-100% level commands (vol, rf, sql, mic, pwr)."""
+        if not args:
+            val = self._rig.get_level(level)
+            if val is not None:
+                self.notify(f"{label}: {val * 100:.0f}%")
+            else:
+                self.notify(f"{label}: not supported by this rig", severity="warning")
+            return
+        try:
+            pct = float(args[0])
+            if not 0 <= pct <= 100:
+                raise ValueError
+        except ValueError:
+            self.notify(f"Usage: {label.lower()} 0–100", severity="warning")
+            return
+        new_val = round(pct / 100, 2)
+        if self._rig.set_level(level, new_val):
+            self.notify(f"{label}: {pct:.0f}%")
+            self._last_controls[level] = new_val
+            self.query_one(RigControlPanel).render_data(self._last_controls)
+        else:
+            self.notify(f"{label}: set failed", severity="error")
+
+    def _cmd_vol(self, args: list[str]) -> None:
+        self._set_pct_level("AF", "Vol", args)
+
+    def _cmd_rf(self, args: list[str]) -> None:
+        self._set_pct_level("RF", "RF gain", args)
+
+    def _cmd_sql(self, args: list[str]) -> None:
+        self._set_pct_level("SQL", "SQL", args)
+
+    def _cmd_mic(self, args: list[str]) -> None:
+        self._set_pct_level("MICGAIN", "Mic", args)
+
+    def _cmd_pwr(self, args: list[str]) -> None:
+        self._set_pct_level("RFPOWER", "Pwr", args)
+
+    def _cmd_att(self, args: list[str]) -> None:
+        if not args:
+            val = self._rig.get_level("ATT")
+            if val is None:
+                self.notify("ATT: not supported by this rig", severity="warning")
+            else:
+                self.notify(f"ATT: {int(val)} dB" if val > 0 else "ATT: off")
+            return
+        arg = args[0].lower()
+        db = 0 if arg == "off" else None
+        if db is None:
+            try:
+                db = int(arg)
+            except ValueError:
+                self.notify("Usage: att [off|0|6|12|18]", severity="warning")
+                return
+        if self._rig.set_level("ATT", float(db)):
+            self.notify(f"ATT: {db} dB" if db else "ATT: off")
+            self._last_controls["ATT"] = float(db)
+            self.query_one(RigControlPanel).render_data(self._last_controls)
+        else:
+            self.notify("ATT: set failed", severity="error")
+
+    def _cmd_pre(self, args: list[str]) -> None:
+        if not args:
+            val = self._rig.get_level("PREAMP")
+            if val is None:
+                self.notify("Pre: not supported by this rig", severity="warning")
+            else:
+                self.notify(f"Pre: {int(val)} dB" if val > 0 else "Pre: off")
+            return
+        arg = args[0].lower()
+        db = {"off": 0, "on": 10}.get(arg)
+        if db is None:
+            try:
+                db = int(arg)
+            except ValueError:
+                self.notify("Usage: pre [off|on|0|10|20]", severity="warning")
+                return
+        if self._rig.set_level("PREAMP", float(db)):
+            self.notify(f"Pre: {db} dB" if db else "Pre: off")
+            self._last_controls["PREAMP"] = float(db)
+            self.query_one(RigControlPanel).render_data(self._last_controls)
+        else:
+            self.notify("Pre: set failed", severity="error")
 
     def _cmd_freq(self, args: list[str]) -> None:
         if self._rig is None:
@@ -1332,7 +1599,10 @@ class RigtopApp(App[None]):
         if len(args) < 2:
             self.notify("Usage: msg <CALL> <text>", severity="warning")
             return
-        sinks = [s for s in self._sinks if type(s).__name__ == "AprsIsSink" and getattr(s, "enabled", True)]
+        sinks = [
+            s for s in self._sinks
+            if type(s).__name__ == "AprsIsSink" and getattr(s, "enabled", True)
+        ]
         if not sinks:
             self.notify("No APRS-IS sink configured", severity="warning")
             return

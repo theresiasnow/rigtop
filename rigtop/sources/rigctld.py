@@ -205,6 +205,11 @@ class RigctldSource(GpsSource):
                 result[lvl] = val
         return result
 
+    def set_level(self, level: str, value: float) -> bool:
+        """Set a rig level (e.g. 'AF', 'RF', 'SQL', 'ATT'). Returns True on success."""
+        resp = self._send_command(f"+L {level} {value}")
+        return "RPRT 0" in resp
+
     def set_mode(self, mode: str, passband: int = 0) -> bool:
         """Set rig mode (e.g. FM, USB, LSB, CW). Returns True on success."""
         resp = self._send_command(f"+M {mode} {passband}")
