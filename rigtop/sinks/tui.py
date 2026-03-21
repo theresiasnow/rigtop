@@ -273,6 +273,7 @@ class CommandSuggester(Suggester):
         "info":   [],
         "mode":   ["USB", "LSB", "FM", "AM", "CW", "CWR", "PKTUSB", "PKTLSB", "PKTFM"],
         "msg":    [],
+        "send":   [],
         "q":      [],
         "quit":   [],
         "scan":   [],
@@ -395,12 +396,9 @@ class StationPanel(Static):
         grid: str,
         gps_src: str,
         start_time: float,
-        source_label: str,
         location: dict | None = None,
     ) -> None:
         txt = Text()
-        if source_label:
-            txt.append(f" {source_label}\n", style="dim")
         if pos is None:
             txt.append(" No GPS fix\n", style="yellow")
         else:
@@ -438,9 +436,12 @@ class ConnectionBar(Static):
 
     _ACTIVE: ClassVar[set[str]] = {"receiving", "open", "listening", "ready"}
 
-    def render_data(self, sinks: list, dw_launcher=None, dw_client=None) -> None:
+    def render_data(self, sinks: list, dw_launcher=None, dw_client=None, rig=None) -> None:
         self.border_title = "Connections"
         lines: list[Text] = []
+
+        if rig is not None and hasattr(rig, "connections"):
+            lines.extend(self._fmt_conn(c) for c in rig.connections())
 
         for sink in sinks:
             if type(sink).__name__ == "TuiSink":
@@ -669,10 +670,10 @@ class RigtopApp(App[None]):
         with Horizontal(id="top-row"):
             yield RigPanel(id="rig-panel")
             yield StationPanel(id="station-panel")
+        yield ConnectionBar(id="conn-bar")
         with Horizontal(id="aprs-row"):
             yield AprsPanel(id="aprs-panel")
             yield MsgPanel(id="msg-panel")
-        yield ConnectionBar(id="conn-bar")
         yield RichLog(id="dw-log", highlight=False, markup=False, auto_scroll=True)
         with Horizontal(id="cmd-bar"):
             yield Label("❯ ", id="cmd-prompt")
@@ -885,7 +886,7 @@ class RigtopApp(App[None]):
             freq, mode, passband, ptt, meters, self._rig_name, self._wd_tripped,
         )
         self.query_one(StationPanel).render_data(
-            pos, grid, gps_src, self._start_time, source_label, location,
+            pos, grid, gps_src, self._start_time, location,
         )
 
         # Update APRS / messages panes when APRS mode is active
@@ -929,7 +930,7 @@ class RigtopApp(App[None]):
 
     def _refresh_conn_bar(self) -> None:
         self.query_one(ConnectionBar).render_data(
-            self._sinks, self._dw_launcher, self._dw_client
+            self._sinks, self._dw_launcher, self._dw_client, self._rig
         )
 
     def _show_conn_error(self, msg: str) -> None:
@@ -955,6 +956,7 @@ class RigtopApp(App[None]):
             "freq":   self._cmd_freq,
             "mode":   self._cmd_mode,
             "msg":    self._cmd_msg,
+            "send":   self._cmd_msg,
             "info":   lambda _: self._cmd_info(),
             "help":   lambda _: self._cmd_help(),
             "scan":   lambda _: self._cmd_scan(),
@@ -1251,15 +1253,20 @@ class RigtopApp(App[None]):
             self.notify(f"Failed to set mode {mode}", severity="error")
 
     def _cmd_msg(self, args: list[str]) -> None:
+        if not self._aprs_active:
+            self.notify("APRS not active — use :aprs on first", severity="warning")
+            return
         if len(args) < 2:
             self.notify("Usage: msg <CALL> <text>", severity="warning")
             return
         sinks = [s for s in self._sinks if type(s).__name__ == "AprsIsSink"]
         if not sinks:
-            self.notify("No APRS-IS sink", severity="warning")
+            self.notify("No APRS-IS sink configured", severity="warning")
             return
         dest, text = args[0].upper(), " ".join(args[1:])
         sinks[0].send_message(dest, text)
+        if self._msg_buffer:
+            self._msg_buffer.push_tx(dest, text)
         self.notify(f"→ {dest}: {text}")
 
     def _cmd_info(self) -> None:

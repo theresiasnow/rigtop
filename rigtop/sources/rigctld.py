@@ -220,5 +220,16 @@ class RigctldSource(GpsSource):
         resp = self._send_command(f"+T {1 if on else 0}")
         return "RPRT 0" in resp
 
+    def connections(self) -> list[dict]:
+        status = "open" if self._sock else "closed"
+        return [
+            {
+                "label": "rigctld",
+                "kind": "tcp",
+                "status": status,
+                "address": f"{self.host}:{self.port}",
+            }
+        ]
+
     def __str__(self) -> str:
         return f"rigctld@{self.host}:{self.port}"
