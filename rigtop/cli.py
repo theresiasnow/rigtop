@@ -329,17 +329,26 @@ def _start_sinks(
 
 
 def _shutdown(res: AppResources) -> None:
+    print("\nShutting down…")
+    print(f"  Closing rig connection ({res.rig})")
     res.rig.close()
     if res.dw_client:
+        print(f"  Stopping Direwolf KISS client ({res.dw_client})")
         res.dw_client.close()
     if res.dw_launcher:
+        print("  Stopping Direwolf")
         res.dw_launcher.stop()
     if res.launcher:
+        print("  Stopping rigctld")
         res.launcher.stop()
     if res.gps_fallback:
+        print("  Closing GPS fallback")
         res.gps_fallback.close()
     for sink in res.sinks:
+        if not getattr(sink, "tui", False):
+            print(f"  Closing sink {sink}")
         sink.close()
+    print("Done.")
 
 
 # ---------------------------------------------------------------------------
