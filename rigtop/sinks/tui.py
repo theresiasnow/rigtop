@@ -1356,14 +1356,17 @@ class RigtopApp(App[None]):
             self._rig_name,
             self._wd_tripped,
         )
-        aprsis_sinks = [
-            s
-            for s in self._sinks
-            if type(s).__name__ == "AprsIsSink" and getattr(s, "enabled", True)
-        ]
+        aprsis_sinks = [s for s in self._sinks if type(s).__name__ == "AprsIsSink"]
         if aprsis_sinks:
-            s = aprsis_sinks[0]
-            beacon_enabled = s._beacon_enabled and s.connected
+            # Prefer a connected sink, then an enabled one, else the first configured
+            s = (
+                next((x for x in aprsis_sinks if getattr(x, "connected", False)), None)
+                or next((x for x in aprsis_sinks if getattr(x, "_beacon_enabled", False)), None)
+                or aprsis_sinks[0]
+            )
+            beacon_enabled = bool(getattr(s, "_beacon_enabled", False)) and bool(
+                getattr(s, "connected", False)
+            )
         else:
             beacon_enabled = None
         self.query_one(StationPanel).render_data(
