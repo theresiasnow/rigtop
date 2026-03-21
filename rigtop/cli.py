@@ -461,6 +461,9 @@ def main() -> None:
             )
     except KeyboardInterrupt:
         pass
+    except Exception:
+        logger.exception("Fatal error — rigtop exiting")
+        sys.exit(1)
     finally:
         _shutdown(res)
 

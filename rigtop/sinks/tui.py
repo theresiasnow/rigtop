@@ -517,7 +517,7 @@ class ConnectionBar(Static):
 
     # Column widths: icon(1) name(14) kind(6) status(11) extra
     _COL_NAME   = 14
-    _COL_KIND   =  6
+    _COL_KIND   =  8
     _COL_STATUS = 11
 
     def _fmt_conn(self, conn: dict) -> Text:
@@ -538,13 +538,13 @@ class ConnectionBar(Static):
         row.append(f"{name_col:<{self._COL_NAME}}", style="bold" if active else "dim")
         # Kind column
         kind_col = (f"[{kind}]" if kind else "")[:self._COL_KIND]
-        row.append(f"  {kind_col:<{self._COL_KIND}}", style="dim")
+        row.append(f"   {kind_col:<{self._COL_KIND}}", style="dim")
         # Status column
         status_col = status[:self._COL_STATUS]
-        row.append(f"  {status_col:<{self._COL_STATUS}}", style=colour)
+        row.append(f"   {status_col:<{self._COL_STATUS}}", style=colour)
         # Extra: address / packet count / connected clients
         if address:
-            row.append(f"  {address}", style="dim")
+            row.append(f"   {address}", style="dim")
         if isinstance(clients, int) and clients > 0:
             row.append(f"  {clients} pkts", style="dim cyan")
         elif isinstance(clients, list) and clients:
@@ -774,7 +774,7 @@ class RigtopApp(App[None]):
         self.title = "  ".join(parts)
         badges = []
         if self._aprs_active:
-            detail = " IS" if self._aprs_is else (" RF" if self._dw_running else "")
+            detail = " IG" if self._aprs_is else (" RF" if self._dw_running else "")
             badges.append(f"Mode: APRS{detail}")
         elif self._packet_active:
             badges.append("Mode: PACKET")
@@ -804,8 +804,13 @@ class RigtopApp(App[None]):
                 data = self._do_poll()
                 self.call_from_thread(self._apply_data, data)
             except Exception as e:
+                if "not running" in str(e).lower():
+                    break
                 logger.warning("Poll error: {}", e)
-                self.call_from_thread(self._show_conn_error, str(e))
+                try:
+                    self.call_from_thread(self._show_conn_error, str(e))
+                except Exception:
+                    break
                 _time.sleep(5)
                 try:
                     self._rig.reconnect()
@@ -915,7 +920,7 @@ class RigtopApp(App[None]):
         self.query_one(RigPanel).render_data(
             freq, mode, passband, ptt, meters, self._rig_name, self._wd_tripped,
         )
-        aprsis_sinks = [s for s in self._sinks if type(s).__name__ == "AprsIsSink"]
+        aprsis_sinks = [s for s in self._sinks if type(s).__name__ == "AprsIsSink" and getattr(s, "enabled", True)]
         if aprsis_sinks:
             s = aprsis_sinks[0]
             beacon_enabled = s._beacon_enabled and s.connected
@@ -948,7 +953,7 @@ class RigtopApp(App[None]):
             self._update_title()
             self._update_dw_title()
             dw_log = self.query_one("#dw-log", RichLog)
-            dw_log.styles.border = ("round", "green" if dw_now else "grey50")
+            dw_log.styles.border = ("round", "green" if dw_now else "grey")
 
 
         # Also call send() on peer sinks (nmea, wsjtx, aprsis, etc.)
@@ -1011,7 +1016,7 @@ class RigtopApp(App[None]):
 
     def _find_aprs_sinks(self) -> list:
         names = {"AprsIsSink", "NmeaSink"}
-        return [s for s in self._sinks if type(s).__name__ in names]
+        return [s for s in self._sinks if type(s).__name__ in names and getattr(s, "enabled", True)]
 
     def _cmd_aprs(self, args: list[str]) -> None:
         sinks = self._find_aprs_sinks()
@@ -1264,7 +1269,7 @@ class RigtopApp(App[None]):
         self._start_direwolf(profile)
 
     def _cmd_beacon(self, args: list[str]) -> None:
-        sinks = [s for s in self._sinks if type(s).__name__ == "AprsIsSink"]
+        sinks = [s for s in self._sinks if type(s).__name__ == "AprsIsSink" and getattr(s, "enabled", True)]
         if not sinks:
             self.notify("No APRS-IS sink configured", severity="warning")
             return
@@ -1327,7 +1332,7 @@ class RigtopApp(App[None]):
         if len(args) < 2:
             self.notify("Usage: msg <CALL> <text>", severity="warning")
             return
-        sinks = [s for s in self._sinks if type(s).__name__ == "AprsIsSink"]
+        sinks = [s for s in self._sinks if type(s).__name__ == "AprsIsSink" and getattr(s, "enabled", True)]
         if not sinks:
             self.notify("No APRS-IS sink configured", severity="warning")
             return
