@@ -94,7 +94,7 @@ class DirewolfLauncher:
         self._pty_proc = winpty.PtyProcess.spawn(
             cmd,
             cwd=str(self.install_path),
-            dimensions=(50, 220),   # rows × cols (enough for Direwolf's wide output)
+            dimensions=(50, 220),   # rows x cols (enough for Direwolf's wide output)
         )
         self._stderr_thread = threading.Thread(
             target=self._read_pty, daemon=True,

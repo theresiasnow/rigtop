@@ -20,45 +20,188 @@ def _is_tui(sink: PositionSink) -> bool:
     return getattr(sink, "tui", False)
 
 
+# ---------------------------------------------------------------------------
+# TX watchdog
+# ---------------------------------------------------------------------------
+
+class TxWatchdog:
+    """Tracks TX duration and trips PTT off when the timeout is exceeded."""
+
+    def __init__(self, cfg: WatchdogConfig | None) -> None:
+        self._cfg = cfg
+        self._tx_start: float | None = None
+        self._tripped: bool = False
+        self._prev_ptt: bool = False
+
+    @property
+    def tripped(self) -> bool:
+        return self._tripped
+
+    def update(self, ptt: bool | None, rig: RigctldSource, extras: dict, tui_sink) -> None:
+        """Update watchdog state; force PTT off and mutate *extras* if tripped."""
+        ptt_bool = bool(ptt)
+
+        # Edge detection
+        if ptt_bool and not self._prev_ptt:
+            self._tx_start = time.monotonic()
+            logger.info("TX started")
+        elif not ptt_bool and self._prev_ptt:
+            if self._tx_start is not None:
+                tx_dur = time.monotonic() - self._tx_start
+                logger.info("TX ended after {:.1f}s", tx_dur)
+            else:
+                logger.info("TX ended")
+            if self._tripped:
+                logger.info("TX watchdog reset — radio back to RX")
+            self._tx_start = None
+            self._tripped = False
+        self._prev_ptt = ptt_bool
+
+        if self._cfg is None or ptt is None:
+            return
+
+        if ptt_bool:
+            if self._tx_start is None:
+                self._tx_start = time.monotonic()
+            tx_dur = time.monotonic() - self._tx_start
+            if not self._tripped and tx_dur >= self._cfg.tx_timeout:
+                self._tripped = True
+                logger.critical(
+                    "TX WATCHDOG: transmitting for {:.0f}s (limit {}s) — forcing PTT off",
+                    tx_dur, self._cfg.tx_timeout,
+                )
+                rig.set_ptt(False)
+                extras["ptt"] = False
+                extras["wd_tripped"] = True
+                if tui_sink is not None:
+                    tui_sink.show_watchdog_alert(tx_dur, self._cfg.tx_timeout)
+
+
+# ---------------------------------------------------------------------------
+# GPS resolution
+# ---------------------------------------------------------------------------
+
+def resolve_position(
+    rig: RigctldSource,
+    gps_fallback: GpsSource | None,
+    static_pos: Position | None,
+) -> tuple[Position | None, str]:
+    """Return the best available position and its source label."""
+    pos = rig.get_position()
+    if pos is not None:
+        return pos, "rig"
+    if gps_fallback is not None:
+        pos = gps_fallback.get_position()
+        if pos is not None:
+            return pos, "fallback"
+    if static_pos is not None:
+        return static_pos, "static"
+    return None, "none"
+
+
+# ---------------------------------------------------------------------------
+# Meters
+# ---------------------------------------------------------------------------
+
+def collect_meters(rig: RigctldSource) -> dict[str, float]:
+    """Poll all rig meters and return a flat dict."""
+    m: dict[str, float] = {}
+    strength = rig.get_strength()
+    if strength is not None:
+        m["STRENGTH"] = strength
+    m.update(rig.get_meters(levels=["ALC", "SWR", "RFPOWER_METER", "COMP_METER"]))
+    rfpower = rig.get_level("RFPOWER")
+    if rfpower is not None:
+        m["RFPOWER"] = rfpower
+    return m
+
+
+# ---------------------------------------------------------------------------
+# Console output (non-TUI mode)
+# ---------------------------------------------------------------------------
+
+def _print_cycle(
+    now_str: str,
+    pos: Position | None,
+    grid: str,
+    extras: dict,
+) -> None:
+    """Print one poll cycle to stdout (non-TUI mode only)."""
+    if pos is None:
+        print(f"[{now_str}] No GPS fix available\n")
+        return
+    gps_src = extras.get("gps_src", "?")
+    print(f"[{now_str}] {pos.lat:.6f}, {pos.lon:.6f}  Grid: {grid}  (GPS: {gps_src})")
+    freq = extras.get("freq")
+    mode = extras.get("mode")
+    if freq or mode:
+        freq_mhz = f"{float(freq) / 1e6:.6f} MHz" if freq else "?"
+        print(f"  Rig: {freq_mhz}  {mode or '?'}")
+    meter_vals = extras.get("meters")
+    if meter_vals:
+        parts = []
+        for name, val in meter_vals.items():
+            if name == "STRENGTH":
+                parts.append(f"S-meter: {val:+.0f}dB")
+            elif name == "SWR":
+                parts.append(f"SWR: {val:.1f}")
+            else:
+                label = name.replace("_METER", "").replace("_", " ")
+                parts.append(f"{label}: {val:.2f}")
+        print(f"  Meters: {', '.join(parts)}")
+    print()
+
+
+# ---------------------------------------------------------------------------
+# Key listener (console mode)
+# ---------------------------------------------------------------------------
+
+def _dispatch_key(ch: str, stop: threading.Event, tui_sink) -> bool:
+    """Handle one keypress. Returns True if the stop event was set."""
+    if tui_sink is not None and tui_sink.command_mode:
+        if ch in ("\r", "\n"):
+            cmd = tui_sink.command_buf
+            tui_sink.command_buf = ""
+            tui_sink.command_mode = False
+            if cmd.strip() in ("q", "quit"):
+                stop.set()
+                return True
+            tui_sink.execute_command(cmd)
+        elif ch == "\x1b":
+            tui_sink.command_buf = ""
+            tui_sink.command_mode = False
+        elif ch in ("\x7f", "\x08"):  # Backspace (both Unix and Windows)
+            tui_sink.command_buf = tui_sink.command_buf[:-1]
+        elif ch == "\t":
+            tui_sink.tab_complete()
+        elif ch == "\x03":  # Ctrl+C
+            tui_sink.command_buf = ""
+            tui_sink.command_mode = False
+        else:
+            tui_sink.command_buf += ch
+        tui_sink.refresh_command_bar()
+        return False
+
+    # Normal mode
+    if ch == ":" and tui_sink is not None:
+        tui_sink.command_mode = True
+        tui_sink.command_buf = ""
+        tui_sink.refresh_command_bar()
+        return False
+    if ch == "\x03":  # Ctrl+C
+        stop.set()
+        return True
+    return False
+
+
 def _key_listener(stop: threading.Event, tui_sink=None) -> None:
-    """Background thread: ':q' to quit, route commands to TUI."""
+    """Background thread: ':q' to quit, route commands to TUI sink."""
     if sys.platform == "win32":
         import msvcrt
         while not stop.is_set():
             if msvcrt.kbhit():
                 ch = msvcrt.getwch()
-                # Command mode
-                if tui_sink is not None and tui_sink.command_mode:
-                    if ch in ("\r", "\n"):
-                        cmd = tui_sink.command_buf
-                        tui_sink.command_buf = ""
-                        tui_sink.command_mode = False
-                        if cmd.strip() in ("q", "quit"):
-                            stop.set()
-                            return
-                        tui_sink.execute_command(cmd)
-                    elif ch == "\x1b":  # Escape
-                        tui_sink.command_buf = ""
-                        tui_sink.command_mode = False
-                    elif ch == "\x08":  # Backspace
-                        tui_sink.command_buf = tui_sink.command_buf[:-1]
-                    elif ch == "\t":  # Tab completion
-                        tui_sink.tab_complete()
-                    elif ch == "\x03":  # Ctrl+C
-                        tui_sink.command_buf = ""
-                        tui_sink.command_mode = False
-                    else:
-                        tui_sink.command_buf += ch
-                    tui_sink.refresh_command_bar()
-                    continue
-                # Normal mode
-                if ch == ":" and tui_sink is not None:
-                    tui_sink.command_mode = True
-                    tui_sink.command_buf = ""
-                    tui_sink.refresh_command_bar()
-                    continue
-                if ch == "\x03":  # Ctrl+C
-                    stop.set()
+                if _dispatch_key(ch, stop, tui_sink):
                     return
             else:
                 time.sleep(0.1)
@@ -71,42 +214,15 @@ def _key_listener(stop: threading.Event, tui_sink=None) -> None:
             tty.setcbreak(fd)
             while not stop.is_set():
                 ch = sys.stdin.read(1)
-                # Command mode
-                if tui_sink is not None and tui_sink.command_mode:
-                    if ch in ("\r", "\n"):
-                        cmd = tui_sink.command_buf
-                        tui_sink.command_buf = ""
-                        tui_sink.command_mode = False
-                        if cmd.strip() in ("q", "quit"):
-                            stop.set()
-                            return
-                        tui_sink.execute_command(cmd)
-                    elif ch == "\x1b":  # Escape
-                        tui_sink.command_buf = ""
-                        tui_sink.command_mode = False
-                    elif ch in ("\x7f", "\x08"):  # Backspace
-                        tui_sink.command_buf = tui_sink.command_buf[:-1]
-                    elif ch == "\t":  # Tab completion
-                        tui_sink.tab_complete()
-                    elif ch == "\x03":  # Ctrl+C
-                        tui_sink.command_buf = ""
-                        tui_sink.command_mode = False
-                    else:
-                        tui_sink.command_buf += ch
-                    tui_sink.refresh_command_bar()
-                    continue
-                # Normal mode
-                if ch == ":" and tui_sink is not None:
-                    tui_sink.command_mode = True
-                    tui_sink.command_buf = ""
-                    tui_sink.refresh_command_bar()
-                    continue
-                if ch == "\x03":  # Ctrl+C
-                    stop.set()
+                if _dispatch_key(ch, stop, tui_sink):
                     return
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
+
+# ---------------------------------------------------------------------------
+# Main polling loop
+# ---------------------------------------------------------------------------
 
 def run(
     rig: RigctldSource,
@@ -131,10 +247,7 @@ def run(
     key_thread = threading.Thread(target=_key_listener, args=(stop, tui_sink), daemon=True)
     key_thread.start()
 
-    # TX watchdog state
-    _tx_start: float | None = None  # monotonic timestamp when TX began
-    _wd_tripped: bool = False       # True after watchdog has fired (until RX resumes)
-    _prev_ptt: bool = False         # previous PTT state for edge detection
+    wd = TxWatchdog(watchdog)
 
     if not has_tui:
         print(f"Rig:      {rig}")
@@ -146,25 +259,11 @@ def run(
 
     while True:
         try:
-            # GPS: try rig first, then fallback
-            pos = rig.get_position()
-            gps_src = "rig"
-            if pos is None and gps_fallback:
-                pos = gps_fallback.get_position()
-                gps_src = "fallback"
-            if pos is None and static_pos is not None:
-                pos = static_pos
-                gps_src = "static"
-
+            pos, gps_src = resolve_position(rig, gps_fallback, static_pos)
             now_str = datetime.datetime.now().strftime("%H:%M:%S")
 
-            if pos is None:
-                if not has_tui:
-                    print(f"[{now_str}] No GPS fix available\n")
-            else:
+            if pos is not None:
                 grid = maidenhead(pos.lat, pos.lon)
-
-                # Rig data (always from rigctld)
                 mode, passband = rig.get_mode_and_passband()
                 extras: dict = {
                     "source_label": str(rig),
@@ -175,91 +274,28 @@ def run(
                     "ptt": rig.get_ptt(),
                 }
 
-                # ── TX watchdog ──
-                ptt = extras["ptt"]
-                if ptt and not _prev_ptt:
-                    _tx_start = time.monotonic()
-                    logger.info("TX started")
-                elif not ptt and _prev_ptt:
-                    if _tx_start is not None:
-                        tx_dur = time.monotonic() - _tx_start
-                        logger.info("TX ended after {:.1f}s", tx_dur)
-                    else:
-                        logger.info("TX ended")
-                    if _wd_tripped:
-                        logger.info("TX watchdog reset — radio back to RX")
-                    _tx_start = None
-                    _wd_tripped = False
-                _prev_ptt = bool(ptt)
-                if watchdog and ptt is not None:
-                    if ptt:
-                        if _tx_start is None:
-                            _tx_start = time.monotonic()
-                        tx_dur = time.monotonic() - _tx_start
-                        if not _wd_tripped and tx_dur >= watchdog.tx_timeout:
-                            _wd_tripped = True
-                            logger.critical(
-                                "TX WATCHDOG: transmitting for {:.0f}s "
-                                "(limit {}s) — forcing PTT off",
-                                tx_dur, watchdog.tx_timeout,
-                            )
-                            rig.set_ptt(False)
-                            extras["ptt"] = False
-                            extras["wd_tripped"] = True
-                            if tui_sink is not None:
-                                tui_sink.show_watchdog_alert(
-                                    tx_dur, watchdog.tx_timeout,
-                                )
-                    else:
-                        pass  # reset handled above in PTT transition logic
-                if meters:
-                    # Poll all meters every cycle — S-meter on RX, TX meters update live
-                    m: dict[str, float] = {}
-                    strength = rig.get_strength()
-                    if strength is not None:
-                        m["STRENGTH"] = strength
-                    m.update(rig.get_meters(levels=["ALC", "SWR", "RFPOWER_METER", "COMP_METER"]))
-                    rfpower = rig.get_level("RFPOWER")
-                    if rfpower is not None:
-                        m["RFPOWER"] = rfpower
-                    extras["meters"] = m
+                wd.update(extras["ptt"], rig, extras, tui_sink)
 
-                # Print summary (non-TUI only)
+                if meters:
+                    extras["meters"] = collect_meters(rig)
+
                 if not has_tui:
-                    print(
-                        f"[{now_str}] {pos.lat:.6f}, {pos.lon:.6f}"
-                        f"  Grid: {grid}  (GPS: {gps_src})"
-                    )
-                    freq = extras.get("freq")
-                    mode = extras.get("mode")
-                    if freq or mode:
-                        freq_mhz = f"{float(freq) / 1e6:.6f} MHz" if freq else "?"
-                        print(f"  Rig: {freq_mhz}  {mode or '?'}")
-                    meter_vals = extras.get("meters")
-                    if meter_vals:
-                        parts = []
-                        for name, val in meter_vals.items():
-                            if name == "STRENGTH":
-                                parts.append(f"S-meter: {val:+.0f}dB")
-                            elif name == "SWR":
-                                parts.append(f"SWR: {val:.1f}")
-                            else:
-                                label = name.replace("_METER", "").replace("_", " ")
-                                parts.append(f"{label}: {val:.2f}")
-                        print(f"  Meters: {', '.join(parts)}")
+                    _print_cycle(now_str, pos, grid, extras)
 
                 for sink in sinks:
                     msg = sink.send(pos, grid, **extras)
                     if msg and not has_tui:
                         print(f"  {msg}")
+            else:
+                if not has_tui:
+                    _print_cycle(now_str, None, "", {})
 
-            if not has_tui:
+            if not has_tui and pos is not None:
                 print()
 
             if once:
                 break
 
-            # Sleep in short intervals so we can react to 'q' quickly
             for _ in range(int(interval * 10)):
                 if stop.is_set():
                     break
@@ -277,14 +313,12 @@ def run(
                         s.show_alert(str(e), f"rigctld @ {rig.host}:{rig.port}")
             else:
                 print(f"Connection error: {e} — retrying…")
-            # Wait before retrying, but stay responsive to 'q'
             for _ in range(50):  # ~5 seconds
                 if stop.is_set():
                     break
                 time.sleep(0.1)
             if stop.is_set():
                 break
-            # Try to reconnect
             try:
                 rig.reconnect()
                 logger.info("Reconnected to rigctld")

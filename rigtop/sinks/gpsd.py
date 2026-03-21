@@ -65,9 +65,10 @@ class _GpsdClient:
         """Send a JSON line. Returns False if the connection is dead."""
         try:
             self.sock.sendall((json.dumps(obj) + "\r\n").encode("ascii"))
-            return True
         except OSError:
             return False
+        else:
+            return True
 
     def close(self) -> None:
         try:

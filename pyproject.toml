@@ -20,6 +20,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pylint>=3.0",
     "ruff>=0.15.6",
 ]
 
@@ -31,13 +32,57 @@ target-version = "py314"
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "W",    # pycodestyle warnings
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+    "PTH",  # use pathlib instead of os.path
+    "PIE",  # misc cleanup
+    "TRY",  # exception handling anti-patterns
+    "G",    # logging format strings
+    "C4",   # flake8-comprehensions
+    "PERF", # performance anti-patterns
+]
 ignore = [
     "RUF001",  # ambiguous unicode chars (intentional en dashes in help text)
     "SIM102",  # nested if → combined if (less readable)
     "SIM105",  # contextlib.suppress (explicit try/except is clearer)
     "SIM108",  # ternary operator (readability preference)
     "SIM114",  # combine if branches (different conditions)
+    "TRY003",  # long exception messages are fine
+    "TRY301",  # abstract raise — not always clearer
+    "PIE790",  # unnecessary pass (intentional in ABCs)
+    "G004",    # f-string in logging — loguru uses f-strings intentionally
 ]
 
+[tool.pylint.main]
+py-version = "3.14"
+jobs = 0  # auto-detect CPU count
 
+[tool.pylint."messages control"]
+disable = [
+    "missing-module-docstring",
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "too-few-public-methods",
+    "too-many-arguments",
+    "too-many-instance-attributes",
+    "too-many-locals",
+    "too-many-branches",
+    "too-many-statements",
+    "import-outside-toplevel",   # intentional for optional platform imports
+    "protected-access",          # internal helpers access _ attrs by convention
+    "fixme",                     # TODO/FIXME comments are expected
+]
+
+[tool.pylint.format]
+max-line-length = 100
+
+[tool.pylint.design]
+max-args = 12
+max-bool-expr = 6

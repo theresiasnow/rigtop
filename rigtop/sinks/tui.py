@@ -14,8 +14,7 @@ from rich.text import Text
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
-from textual.widgets import Label
+from textual.containers import Horizontal
 from textual.reactive import reactive
 from textual.suggester import Suggester
 from textual.widgets import Header, Input, Label, RichLog, Static
@@ -24,7 +23,6 @@ from textual.worker import get_current_worker
 from rigtop.geo import format_position, maidenhead
 from rigtop.sinks import PositionSink, register_sink
 from rigtop.sources import Position
-
 
 # ── APRS / message buffer classes (used by aprsis sink + cli.py) ───────────
 
@@ -158,7 +156,7 @@ class DirewolfBuffer:
         self._lines: deque[tuple[str, str, str]] = deque(maxlen=maxlen)
         self.packet_count: int = 0
         # Optional secondary callback (set by RigtopApp to forward to RichLog)
-        self._forward: "list[object]" = []  # callable[str] | None stored as list
+        self._forward: list[object] = []  # callable[str] | None stored as list
 
     def push(self, line: str) -> None:
         clean = _dw_clean(line)
@@ -398,7 +396,7 @@ class StationPanel(Static):
 class ConnectionBar(Static):
     """Multi-line connection status for all active sinks and sources."""
 
-    _ACTIVE = {"receiving", "open", "listening", "ready"}
+    _ACTIVE: ClassVar[set[str]] = {"receiving", "open", "listening", "ready"}
 
     def render_data(self, sinks: list, dw_launcher=None, dw_client=None) -> None:
         self.border_title = "Connections"
@@ -408,8 +406,7 @@ class ConnectionBar(Static):
             if type(sink).__name__ == "TuiSink":
                 continue
             if hasattr(sink, "connections"):
-                for conn in sink.connections():
-                    lines.append(self._fmt_conn(conn))
+                lines.extend(self._fmt_conn(c) for c in sink.connections())
             elif hasattr(sink, "connected"):
                 connected = sink.connected
                 name = type(sink).__name__.replace("Sink", "").replace("Source", "")
@@ -421,12 +418,12 @@ class ConnectionBar(Static):
                 lines.append(row)
 
         if dw_client is not None and hasattr(dw_client, "connections"):
-            for conn in dw_client.connections():
-                lines.append(self._fmt_conn(conn))
+            lines.extend(self._fmt_conn(c) for c in dw_client.connections())
 
         if dw_launcher is not None:
             running = dw_launcher.running
-            profile = (dw_launcher.active_config or "").replace("direwolf-", "").replace(".conf", "")
+            active = dw_launcher.active_config or ""
+            profile = active.replace("direwolf-", "").replace(".conf", "")
             icon = "●" if running else "○"
             colour = "green" if running else "dim"
             row = Text()
@@ -530,7 +527,7 @@ class RigtopApp(App[None]):
     }
     """
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list] = [
         Binding("ctrl+c", "quit", "Quit", show=False),
         Binding("escape", "clear_input", "Clear", show=False),
         Binding("f1", "show_help", "Help"),
@@ -921,7 +918,9 @@ class RigtopApp(App[None]):
                 if self._aprs_config.qsy_mode:
                     if self._rig.set_mode(self._aprs_config.qsy_mode):
                         qsy.append(self._aprs_config.qsy_mode)
-            started = [str(s) for s in sinks if not s.connected and (s.start() or True)]
+            for s in sinks:
+                if not s.connected:
+                    s.start()
             self._aprs_active = True
             self._update_title()
             self._start_direwolf("aprs")

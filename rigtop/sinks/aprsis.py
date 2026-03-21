@@ -267,10 +267,11 @@ class AprsIsSink(PositionSink):
             )
             if self.msg_buffer is not None:
                 self.msg_buffer.push_tx(dest.upper(), text, msgno)
-            return msgno
         except OSError as e:
             logger.warning("APRS msg send failed: {}", e)
             return None
+        else:
+            return msgno
 
     def _retry_pending(self) -> None:
         """Resend unacknowledged messages (called from keepalive loop)."""
@@ -350,12 +351,13 @@ class AprsIsSink(PositionSink):
             # Auto-set range filter from first beacon position if none configured
             if not self._filter_sent:
                 self._send_filter(f"r/{pos.lat:.1f}/{pos.lon:.1f}/200")
-            return f"APRS-IS: beaconed to {self._server}"
         except OSError as e:
             logger.warning("APRS-IS send failed: {}", e)
             with self._lock:
                 self._connected = False
             return None
+        else:
+            return f"APRS-IS: beaconed to {self._server}"
 
     def _send_filter(self, filt: str) -> None:
         """Send a server-side filter command to APRS-IS."""

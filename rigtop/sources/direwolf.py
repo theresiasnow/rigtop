@@ -123,11 +123,12 @@ class DirewolfClient:
             self._sock = sock
             self._connected = True
             logger.info("Direwolf KISS connected to {}:{}", self._host, self._port)
-            return True
         except OSError as e:
             logger.warning("Direwolf KISS connection failed: {}", e)
             self._connected = False
             return False
+        else:
+            return True
 
     def _run(self) -> None:
         """Main loop: connect, read KISS frames, decode, push to buffer."""

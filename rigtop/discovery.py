@@ -104,11 +104,12 @@ def scan_lan(
 
     # Build work items: (host, port)
     targets: list[tuple[str, int]] = []
-    for net in subnets:
-        for host in net.hosts():
-            host_str = str(host)
-            for port in ports:
-                targets.append((host_str, port))
+    targets.extend(
+        (str(host), port)
+        for net in subnets
+        for host in net.hosts()
+        for port in ports
+    )
 
     total = len(targets)
     logger.info("Scanning {} targets across {} subnets", total, len(subnets))

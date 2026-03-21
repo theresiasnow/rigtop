@@ -121,9 +121,10 @@ class NmeaSink(PositionSink):
         if self._serial and self._serial.is_open:
             try:
                 self._serial.write(data)
-                return f"NMEA → {self.device}"
             except OSError as e:
                 logger.warning("Serial write error: {}", e)
+            else:
+                return f"NMEA → {self.device}"
         return None
 
     def _send_tcp(self, data: bytes) -> str | None:

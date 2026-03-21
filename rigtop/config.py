@@ -210,7 +210,7 @@ def _parse_sinks(data: dict) -> list[SinkConfig]:
     raw = data.get("sink", [{"type": "tui"}])
     if isinstance(raw, dict):
         raw = [raw]
-    return list(SinkConfig(**entry) for entry in raw)
+    return [SinkConfig(**entry) for entry in raw]
 
 
 def load_config(path: Path | None) -> Config:
@@ -226,7 +226,7 @@ def load_config(path: Path | None) -> Config:
         else:
             return Config()
 
-    with open(path, "rb") as f:
+    with path.open("rb") as f:
         data = tomllib.load(f)
 
     general = data.get("general", {})
