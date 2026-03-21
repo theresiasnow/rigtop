@@ -52,18 +52,30 @@ jobs:
           if [ -n "${{ inputs.increment }}" ]; then
             uv run cz bump --increment ${{ inputs.increment }} --yes
           else
-            uv run cz bump --yes
+            uv run cz bump --yes || code=$?
+            # Exit 21 = NO_COMMITS_TO_BUMP (e.g. ci:/docs:/chore: commits).
+            # Treat as a no-op — not an error.
+            if [ "${code:-0}" -eq 21 ]; then
+              echo "No eligible commits to bump — skipping release"
+              echo "tag=" >> "$GITHUB_OUTPUT"
+              exit 0
+            elif [ -n "${code}" ]; then
+              exit $code
+            fi
           fi
           NEW_TAG=$(git describe --tags --abbrev=0)
           echo "tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Push commit and tag
+        if: steps.bump.outputs.tag != ''
         run: git push --follow-tags
 
       - name: Build sdist + wheel
+        if: steps.bump.outputs.tag != ''
         run: uv build
 
       - name: Create GitHub Release
+        if: steps.bump.outputs.tag != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.bump.outputs.tag }}
