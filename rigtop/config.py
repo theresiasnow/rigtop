@@ -124,6 +124,7 @@ class SinkConfig(BaseModel):
     enabled: bool = True
     host: str = "127.0.0.1"
     port: int = Field(default=0, ge=0, le=65535)  # 0 = use sink-type default
+    name: str = ""            # display label (shown in ConnectionBar)
     nmea: bool = False
     device: str = ""          # serial port for nmea/civ_proxy sink
     baudrate: int = 4800       # serial baud rate for nmea/civ_proxy sink

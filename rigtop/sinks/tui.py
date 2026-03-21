@@ -1176,7 +1176,28 @@ class RigtopApp(App[None]):
         self._cmd_sink_toggle("WsjtxSink", "WSJT-X", args)
 
     def _cmd_nmea(self, args: list[str]) -> None:
-        self._cmd_sink_toggle("NmeaSink", "NMEA out", args)
+        sinks = [s for s in self._sinks if type(s).__name__ == "NmeaSink"]
+        if not sinks:
+            self.notify("No nmea sink configured", severity="warning")
+            return
+        if not args:
+            def _id(s) -> str:
+                return s.name or s.device or f"{s.host}:{s.port}"
+            parts = [f"{_id(s)}={'ON' if self._sink_is_active(s) else 'OFF'}" for s in sinks]
+            self.notify(f"NMEA: {', '.join(parts)}")
+            return
+        action = args[0].lower()
+        if action == "on":
+            for s in sinks:
+                if not self._sink_is_active(s):
+                    s.start()
+            self.notify(f"NMEA ON ({len(sinks)} sink{'s' if len(sinks) > 1 else ''})")
+        elif action == "off":
+            for s in sinks:
+                s.close()
+            self.notify(f"NMEA OFF ({len(sinks)} sink{'s' if len(sinks) > 1 else ''})")
+        else:
+            self.notify("Usage: nmea [on|off]", severity="warning")
 
     def _cmd_gpsd(self, args: list[str]) -> None:
         self._cmd_sink_toggle("GpsdSink", "gpsd", args)
