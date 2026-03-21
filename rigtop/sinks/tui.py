@@ -402,14 +402,22 @@ class StationPanel(Static):
         location: dict | None = None,
         beacon_enabled: bool | None = None,
     ) -> None:
+        L = " "  # left margin
+
+        def row(label: str, value_cb) -> None:
+            txt.append(f"{L}{label:<7} ", style="dim")
+            value_cb()
+            txt.append("\n")
+
         txt = Text()
         if pos is None:
-            txt.append(" No GPS fix\n", style="yellow")
+            txt.append(f"{L}No GPS fix\n", style="yellow")
         else:
-            txt.append(f" {format_position(pos.lat, pos.lon)}\n", style="bold white")
-            txt.append(f" {pos.lat:.6f}, {pos.lon:.6f}\n", style="dim")
-            txt.append(" Grid  ", style="dim")
-            txt.append(f"{grid}", style="bold green")
+            txt.append(f"{L}{format_position(pos.lat, pos.lon)}\n", style="bold white")
+
+            # Grid + zones + country on one line
+            txt.append(f"{L}{'Grid':<7} ", style="dim")
+            txt.append(grid, style="bold green")
             if location:
                 cq = location.get("cq", "?")
                 iaru = location.get("iaru", "?")
@@ -421,22 +429,30 @@ class StationPanel(Static):
                 if country and country != cc:
                     txt.append(f"  {country}", style="cyan")
             txt.append("\n")
+
             if pos.alt is not None:
-                txt.append(" Alt   ", style="dim")
+                txt.append(f"{L}{'Alt':<7} ", style="dim")
                 txt.append(f"{pos.alt:.0f} m\n", style="bold")
-        txt.append(" GPS   ", style="dim")
-        txt.append(f"{gps_src}\n", style="bold" if gps_src == "rig" else "yellow")
+
+        # GPS source
+        txt.append(f"{L}{'GPS':<7} ", style="dim")
+        gps_style = "bold" if gps_src == "rig" else ("yellow" if gps_src else "dim")
+        txt.append(f"{gps_src or '—'}\n", style=gps_style)
+
+        # Beacon state (only when APRS-IS sink present)
         if beacon_enabled is not None:
-            txt.append(" Beacon ", style="dim")
+            txt.append(f"{L}{'Beacon':<7} ", style="dim")
             if beacon_enabled:
-                txt.append("● ON\n", style="bold green")
+                txt.append("● ON", style="bold green")
             else:
-                txt.append("○ OFF\n", style="dim red")
+                txt.append("○ OFF", style="dim red")
+            txt.append("\n")
+
         # Uptime
         uptime_s = int(_time.monotonic() - start_time)
         h, rem = divmod(uptime_s, 3600)
         m, s = divmod(rem, 60)
-        txt.append(" Up    ", style="dim")
+        txt.append(f"{L}{'Up':<7} ", style="dim")
         txt.append(f"{h:02d}:{m:02d}:{s:02d}\n", style="dim")
         self.update(txt)
 
