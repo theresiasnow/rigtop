@@ -12,11 +12,12 @@ on:
 
 jobs:
   bump:
-    name: cz bump → push tag → trigger release
+    name: cz bump → build → release
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write
+      contents: write   # push tag + create GitHub release
+      id-token: write   # OIDC for PyPI trusted publishing (future use)
 
     steps:
       - uses: actions/checkout@v6
@@ -41,12 +42,26 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Bump version
+        id: bump
         run: |
           if [ -n "${{ inputs.increment }}" ]; then
             uv run cz bump --increment ${{ inputs.increment }} --yes
           else
             uv run cz bump --yes
           fi
+          NEW_TAG=$(git describe --tags --abbrev=0)
+          echo "tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Push commit and tag
         run: git push --follow-tags
+
+      - name: Build sdist + wheel
+        run: uv build
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.bump.outputs.tag }}
+          files: dist/*
+          generate_release_notes: true
+          make_latest: true
