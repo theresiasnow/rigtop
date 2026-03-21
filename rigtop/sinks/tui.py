@@ -565,7 +565,7 @@ class WaterfallPanel(Static):
                     txt.append(" ")
                     continue
                 norm = max(0.0, min(1.0, (val + 54) / 114))
-                total_sub  = int(norm * height * 8)
+                total_sub  = max(1, int(norm * height * 8))  # always at least 1 sub-block
                 sub_in_row = max(0, min(8, total_sub - rbf * 8))
                 char = self._VBLOCKS[sub_in_row]
                 # Classic equalizer gradient: green base → yellow mid → red peak
@@ -1809,7 +1809,12 @@ class RigtopApp(App[None]):
         raw = args[0].replace(",", ".")
         try:
             val = float(raw)
-            hz = int(val * 1e6) if val < 1000 else int(val)
+            if val < 1_000:
+                hz = int(val * 1_000_000)   # MHz  e.g. 144.800
+            elif val < 1_000_000:
+                hz = int(val * 1_000)       # kHz  e.g. 144800
+            else:
+                hz = int(val)               # Hz   e.g. 144800000
         except ValueError:
             self.notify(f"Invalid frequency: {raw}", severity="error")
             return
@@ -1826,7 +1831,8 @@ class RigtopApp(App[None]):
             m = self._rig.get_mode()
             self.notify(f"Mode: {m or '?'}")
             return
-        mode = args[0].upper()
+        _ALIASES = {"SSB": "USB", "PKT": "PKTUSB", "DIG": "PKTUSB", "DATA": "PKTUSB"}
+        mode = _ALIASES.get(args[0].upper(), args[0].upper())
         pb = int(args[1]) if len(args) > 1 else 0
         if self._rig.set_mode(mode, pb):
             self.notify(f"Mode → {mode}" + (f" ({pb} Hz)" if pb else ""))
