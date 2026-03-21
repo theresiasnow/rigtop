@@ -975,8 +975,8 @@ class RigtopApp(App[None]):
             yield Label("❯ ", id="cmd-prompt")
             yield Input(
                 placeholder=(
-                    "vol | rf | sql | mic | pwr | att | pre"
-                    "  •  freq | mode  •  aprs | aprsis | beacon on/off  •  q"
+                    "aprs | aprsis | packet | beacon on/off"
+                    "  •  nmea | gpsd | civ | wsjtx  •  q"
                 ),
                 id="cmd-input",
                 suggester=CommandSuggester(),
