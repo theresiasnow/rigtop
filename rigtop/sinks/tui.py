@@ -910,7 +910,11 @@ class RigtopApp(App[None]):
             freq, mode, passband, ptt, meters, self._rig_name, self._wd_tripped,
         )
         aprsis_sinks = [s for s in self._sinks if type(s).__name__ == "AprsIsSink"]
-        beacon_enabled = aprsis_sinks[0]._beacon_enabled if aprsis_sinks else None
+        if aprsis_sinks:
+            s = aprsis_sinks[0]
+            beacon_enabled = s._beacon_enabled and s.connected
+        else:
+            beacon_enabled = None
         self.query_one(StationPanel).render_data(
             pos, grid, gps_src, self._start_time, location, beacon_enabled,
         )
@@ -1236,7 +1240,8 @@ class RigtopApp(App[None]):
             return
         sink = sinks[0]
         if not args:
-            state = "ON" if sink._beacon_enabled else "OFF"
+            active = sink._beacon_enabled and sink.connected
+            state = "ON" if active else ("READY" if sink._beacon_enabled else "OFF")
             self.notify(f"Beacon: {state}  (interval {sink._interval}s)")
             return
         action = args[0].lower()
