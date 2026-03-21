@@ -1831,8 +1831,15 @@ class RigtopApp(App[None]):
             m = self._rig.get_mode()
             self.notify(f"Mode: {m or '?'}")
             return
-        _ALIASES = {"SSB": "USB", "PKT": "PKTUSB", "DIG": "PKTUSB", "DATA": "PKTUSB"}
-        mode = _ALIASES.get(args[0].upper(), args[0].upper())
+        _ALIASES = {"PKT": "PKTUSB", "DIG": "PKTUSB", "DATA": "PKTUSB"}
+        raw_mode = args[0].upper()
+        if raw_mode == "SSB":
+            try:
+                freq_hz = int(float(self._rig.get_frequency() or 0))
+            except (ValueError, TypeError):
+                freq_hz = 0
+            raw_mode = "LSB" if freq_hz < 10_000_000 else "USB"
+        mode = _ALIASES.get(raw_mode, raw_mode)
         pb = int(args[1]) if len(args) > 1 else 0
         if self._rig.set_mode(mode, pb):
             self.notify(f"Mode → {mode}" + (f" ({pb} Hz)" if pb else ""))
