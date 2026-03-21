@@ -13,8 +13,8 @@ read-polls that HRD issues at high rate.
 
 from __future__ import annotations
 
+import socket
 import threading
-from collections.abc import Callable
 
 from loguru import logger
 
@@ -150,9 +150,13 @@ class CivProxySink(PositionSink):
         baudrate: int = 19200,
         rig_addr: int = 0,
         rig_name: str = "",
+        host: str = "127.0.0.1",
+        port: int = 4532,
     ) -> None:
         self.device = device
         self.baudrate = baudrate
+        self._rigctld_host = host
+        self._rigctld_port = port
         if rig_addr:
             self.rig_addr = rig_addr
         elif rig_name:
@@ -162,7 +166,9 @@ class CivProxySink(PositionSink):
         self._serial = None  # serial.Serial
         self._stop = threading.Event()
         self._reader_thread: threading.Thread | None = None
-        self._lock = threading.Lock()
+        self._serial_lock = threading.Lock()   # guards serial writes
+        self._rigctld_sock: socket.socket | None = None
+        self._rigctld_lock = threading.Lock()  # guards rigctld socket
         # Cached rig state (updated each poll cycle via send())
         self._freq_hz: int = 0
         self._mode: str = "USB"
@@ -171,8 +177,6 @@ class CivProxySink(PositionSink):
         self._s_meter: float = 0.0
         self._swr: float = 1.0
         self._rfpower: float = 0.0
-        # Callback set by app.py — lets us issue rigctld commands
-        self._rigctld_cmd: Callable[[str], str] | None = None
         # Statistics
         self._rx_frames = 0
         self._tx_frames = 0
@@ -195,7 +199,7 @@ class CivProxySink(PositionSink):
             self._serial = serial.Serial(
                 port=self.device,
                 baudrate=self.baudrate,
-                timeout=0.05,  # short timeout for responsive reading
+                timeout=0.05,
             )
             logger.info(
                 "CI-V proxy opened {} @ {} baud (rig addr 0x{:02X})",
@@ -205,6 +209,21 @@ class CivProxySink(PositionSink):
             logger.warning("civ_proxy: cannot open {}: {}", self.device, exc)
             self._serial = None
             return
+        # Own dedicated rigctld connection — never shared with the poll loop
+        try:
+            sock = socket.create_connection(
+                (self._rigctld_host, self._rigctld_port), timeout=5
+            )
+            sock.settimeout(3.0)
+            self._rigctld_sock = sock
+            logger.info(
+                "CI-V proxy rigctld connection {}:{}",
+                self._rigctld_host, self._rigctld_port,
+            )
+        except OSError as exc:
+            logger.warning("civ_proxy: cannot connect to rigctld: {}", exc)
+            # Keep running — writes will NAK, reads still served from cache
+        self._stop.clear()
         self._reader_thread = threading.Thread(target=self._read_loop, daemon=True)
         self._reader_thread.start()
 
@@ -216,6 +235,12 @@ class CivProxySink(PositionSink):
             except OSError:
                 pass
             self._serial = None
+        if self._rigctld_sock:
+            try:
+                self._rigctld_sock.close()
+            except OSError:
+                pass
+            self._rigctld_sock = None
         if self._reader_thread:
             self._reader_thread.join(timeout=3)
 
@@ -366,35 +391,49 @@ class CivProxySink(PositionSink):
         mode_data = _mode_to_bytes(self._mode)
         return _build_frame(caller, self.rig_addr, 0x04, data=mode_data)
 
+    def _send_rigctld(self, cmd: str) -> str:
+        """Send a command on the proxy's own rigctld socket (thread-safe)."""
+        with self._rigctld_lock:
+            sock = self._rigctld_sock
+            if sock is None:
+                return ""
+            try:
+                sock.sendall((cmd + "\n").encode())
+                resp = b""
+                while True:
+                    chunk = sock.recv(4096)
+                    if not chunk:
+                        break
+                    resp += chunk
+                    if resp.endswith(b"\n"):
+                        break
+                return resp.decode().strip()
+            except OSError as exc:
+                logger.warning("CI-V rigctld error: {}", exc)
+                self._rigctld_sock = None
+                return ""
+
     def _handle_set_freq(self, payload: bytes, caller: int) -> bytes:
         if len(payload) < 5:
             return _nak_frame(caller, self.rig_addr)
         freq_hz = _bcd_to_freq(payload[:5])
         logger.info("CI-V: set freq {} Hz", freq_hz)
-        # Forward to rigctld
-        if self._rigctld_cmd:
-            resp = self._rigctld_cmd(f"+F {freq_hz}")
-            if "RPRT 0" in resp:
-                self._freq_hz = freq_hz
-                return _ack_frame(caller, self.rig_addr)
-            return _nak_frame(caller, self.rig_addr)
-        # No rigctld callback — just update cache
-        self._freq_hz = freq_hz
-        return _ack_frame(caller, self.rig_addr)
+        resp = self._send_rigctld(f"+F {freq_hz}")
+        if "RPRT 0" in resp or not resp:
+            self._freq_hz = freq_hz
+            return _ack_frame(caller, self.rig_addr)
+        return _nak_frame(caller, self.rig_addr)
 
     def _handle_set_mode(self, payload: bytes, caller: int) -> bytes:
         if not payload:
             return _nak_frame(caller, self.rig_addr)
         mode_name, filt = _bytes_to_mode(payload)
         logger.info("CI-V: set mode {} filter {}", mode_name, filt)
-        if self._rigctld_cmd:
-            resp = self._rigctld_cmd(f"+M {mode_name} 0")
-            if "RPRT 0" in resp:
-                self._mode = mode_name
-                return _ack_frame(caller, self.rig_addr)
-            return _nak_frame(caller, self.rig_addr)
-        self._mode = mode_name
-        return _ack_frame(caller, self.rig_addr)
+        resp = self._send_rigctld(f"+M {mode_name} 0")
+        if "RPRT 0" in resp or not resp:
+            self._mode = mode_name
+            return _ack_frame(caller, self.rig_addr)
+        return _nak_frame(caller, self.rig_addr)
 
     def _handle_read_meter(self, payload: bytes, caller: int) -> bytes:
         """CI-V 15 xx — read meter value.
@@ -437,14 +476,11 @@ class CivProxySink(PositionSink):
         # Set PTT
         desired = payload[1] != 0x00
         logger.info("CI-V: set PTT {}", "TX" if desired else "RX")
-        if self._rigctld_cmd:
-            resp = self._rigctld_cmd(f"+T {1 if desired else 0}")
-            if "RPRT 0" in resp:
-                self._ptt = desired
-                return _ack_frame(caller, self.rig_addr)
-            return _nak_frame(caller, self.rig_addr)
-        self._ptt = desired
-        return _ack_frame(caller, self.rig_addr)
+        resp = self._send_rigctld(f"+T {1 if desired else 0}")
+        if "RPRT 0" in resp or not resp:
+            self._ptt = desired
+            return _ack_frame(caller, self.rig_addr)
+        return _nak_frame(caller, self.rig_addr)
 
     # ---- Helpers ----------------------------------------------------------
 
@@ -461,17 +497,13 @@ class CivProxySink(PositionSink):
         """Write a CI-V frame to the serial port."""
         if not self._serial or not self._serial.is_open:
             return
-        with self._lock:
+        with self._serial_lock:
             try:
                 self._serial.write(data)
                 self._tx_frames += 1
                 logger.debug("CI-V TX: {}", data.hex())
             except OSError as e:
                 logger.warning("CI-V serial write error: {}", e)
-
-    def set_rigctld_callback(self, callback: Callable[[str], str]) -> None:
-        """Register the rigctld command callback for write operations."""
-        self._rigctld_cmd = callback
 
     # ---- Display ----------------------------------------------------------
 

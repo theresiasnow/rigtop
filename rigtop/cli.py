@@ -237,10 +237,6 @@ def main():
             sink.dw_buffer = dw_buffer
             sink.rigctld_buffer = rigctld_buffer
             break
-    # Wire CI-V proxy sinks to rigctld for write commands
-    for sink in sinks:
-        if hasattr(sink, 'set_rigctld_callback'):
-            sink.set_rigctld_callback(rig._send_command)
     # --- QSY: only if [aprs] enabled (otherwise :aprs on / :bbs on does it) ---
     if cfg.aprs and cfg.aprs.enabled:
         print(f"[6/8] QSY → {cfg.aprs.freq:.3f} MHz {cfg.aprs.qsy_mode}…")
