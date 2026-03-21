@@ -417,12 +417,12 @@ class RigCommandPanel(Widget):
         self._updating = False
 
     def compose(self) -> ComposeResult:
+        yield Select([(m, m) for m in self._MODES], id="mode-sel")
         yield Button("◄◄", id="step-m10k", classes="step")
         yield Button("◄", id="step-m1k", classes="step")
         yield Label("—", id="freq-lbl")
         yield Button("►", id="step-p1k", classes="step")
         yield Button("►►", id="step-p10k", classes="step")
-        yield Select([(m, m) for m in self._MODES], id="mode-sel")
         yield Button("ATT: off", id="att-btn", classes="cycle")
         yield Button("Pre: off", id="pre-btn", classes="cycle")
         yield Button("NB: off", id="nb-btn", classes="cycle")
