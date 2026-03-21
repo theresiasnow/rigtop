@@ -494,6 +494,9 @@ class WaterfallPanel(Static):
         self._history: deque[float | None] = deque(maxlen=self._ROWS)
         self.border_title = "Waterfall"
 
+    def on_mount(self) -> None:
+        self._render()
+
     def push(self, strength: float | None) -> None:
         self._history.appendleft(strength)
         self._render()
