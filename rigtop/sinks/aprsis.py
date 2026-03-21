@@ -60,7 +60,7 @@ class AprsIsSink(PositionSink):
         symbol_code: str = ">",
         interval: int = 120,
         aprs_filter: str = "",
-        beacon: bool = True,
+        beacon: bool = False,
     ) -> None:
         self._callsign = callsign
         self._server = server
