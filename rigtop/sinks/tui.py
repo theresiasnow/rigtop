@@ -1588,6 +1588,9 @@ class RigtopApp(App[None]):
         if cfg is None:
             self.notify("No [bbs] config section", severity="warning")
             return
+        if not cfg.enabled:
+            self.notify("[bbs] disabled — set enabled = true to use :packet on", severity="warning")
+            return
         if not args:
             state = "ON" if self._packet_active else "OFF"
             self.notify(f"Packet: {state}  ({cfg.freq:.3f} MHz {cfg.mode})")
