@@ -15,6 +15,7 @@ from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
+from textual.message import Message
 from textual.reactive import reactive
 from textual.suggester import Suggester
 from textual.widget import Widget
@@ -396,6 +397,14 @@ class RigCommandPanel(Widget):
     _DATA_ON: ClassVar[dict[str, str]] = {"FM": "PKTFM", "USB": "PKTUSB", "LSB": "PKTLSB"}
     _DATA_OFF: ClassVar[dict[str, str]] = {"PKTFM": "FM", "PKTUSB": "USB", "PKTLSB": "LSB"}
 
+    class ControlChanged(Message):
+        """Posted when a level or function is changed via a panel button."""
+
+        def __init__(self, key: str, value: float) -> None:
+            super().__init__()
+            self.key = key
+            self.value = value
+
     def __init__(self, rig, **kwargs) -> None:
         super().__init__(**kwargs)
         self._rig = rig
@@ -525,22 +534,32 @@ class RigCommandPanel(Widget):
             self._rig.set_freq(self._freq_hz + step_map[btn_id])
         elif btn_id == "att-btn":
             self._att_idx = (self._att_idx + 1) % len(self._ATT_STEPS)
-            if self._rig.set_level("ATT", float(self._ATT_STEPS[self._att_idx])):
+            val = float(self._ATT_STEPS[self._att_idx])
+            if self._rig.set_level("ATT", val):
                 self.query_one("#att-btn", Button).label = self._att_label()
+                self.post_message(self.ControlChanged("ATT", val))
+            else:
+                self._att_idx = (self._att_idx - 1) % len(self._ATT_STEPS)  # revert
         elif btn_id == "pre-btn":
             self._pre_idx = (self._pre_idx + 1) % len(self._PRE_STEPS)
-            if self._rig.set_level("PREAMP", float(self._PRE_STEPS[self._pre_idx])):
+            val = float(self._PRE_STEPS[self._pre_idx])
+            if self._rig.set_level("PREAMP", val):
                 self.query_one("#pre-btn", Button).label = self._pre_label()
+                self.post_message(self.ControlChanged("PREAMP", val))
+            else:
+                self._pre_idx = (self._pre_idx - 1) % len(self._PRE_STEPS)  # revert
         elif btn_id == "nb-btn":
             self._nb_on = not self._nb_on
             if self._rig.set_func("NB", self._nb_on):
                 self.query_one("#nb-btn", Button).label = self._nb_label()
+                self.post_message(self.ControlChanged("NB", float(self._nb_on)))
             else:
                 self._nb_on = not self._nb_on  # revert on failure
         elif btn_id == "nr-btn":
             self._nr_on = not self._nr_on
             if self._rig.set_func("NR", self._nr_on):
                 self.query_one("#nr-btn", Button).label = self._nr_label()
+                self.post_message(self.ControlChanged("NR", float(self._nr_on)))
             else:
                 self._nr_on = not self._nr_on  # revert on failure
         elif btn_id == "data-btn":
@@ -1143,6 +1162,10 @@ class RigtopApp(App[None]):
         self._start_poll()
         self._start_conn_refresh()
         self.query_one("#cmd-input", Input).focus()
+
+    def on_rig_command_panel_control_changed(self, msg: RigCommandPanel.ControlChanged) -> None:
+        """Keep _last_controls in sync when a panel button changes a level/func."""
+        self._last_controls[msg.key] = msg.value
 
     def _wire_dw_log(self) -> None:
         """Forward new DirewolfBuffer pushes to the RichLog widget."""
