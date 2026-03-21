@@ -86,6 +86,7 @@ class GpsConfig(BaseModel):
 
 class GpsStaticConfig(BaseModel):
     """Hard-coded GPS position — used when rig and fallback have no fix."""
+
     enabled: bool = True
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)
@@ -94,29 +95,33 @@ class GpsStaticConfig(BaseModel):
 
 class WatchdogConfig(BaseModel):
     """TX watchdog — force PTT off if transmitting too long."""
+
     tx_timeout: int = Field(default=120, ge=10)  # seconds
 
 
 class DirewolfConfig(BaseModel):
     """Direwolf KISS TCP + optional launcher."""
+
     host: str = "127.0.0.1"
     port: int = Field(default=8001, ge=1, le=65535)
-    install_path: str | None = None   # set to enable launcher
+    install_path: str | None = None  # set to enable launcher
     extra_args: list[str] = Field(default_factory=list)
 
 
 class BbsConfig(BaseModel):
     """Packet BBS settings — frequency/mode for :bbs command."""
+
     enabled: bool = False
-    freq: float = 144.675     # packet frequency in MHz
-    mode: str = "PKTFM"       # rig mode (PKTFM for 1200 baud, PKTUSB for 9600)
+    freq: float = 144.675  # packet frequency in MHz
+    mode: str = "PKTFM"  # rig mode (PKTFM for 1200 baud, PKTUSB for 9600)
 
 
 class AprsConfig(BaseModel):
     """APRS settings — QSY frequency/mode for :aprs on."""
+
     enabled: bool = False
-    freq: float = 0            # QSY rig to this freq (MHz)
-    qsy_mode: str = ""         # rig mode (e.g. FM, USB)
+    freq: float = 0  # QSY rig to this freq (MHz)
+    qsy_mode: str = ""  # rig mode (e.g. FM, USB)
 
 
 class SinkConfig(BaseModel):
@@ -124,18 +129,18 @@ class SinkConfig(BaseModel):
     enabled: bool = True
     host: str = "127.0.0.1"
     port: int = Field(default=0, ge=0, le=65535)  # 0 = use sink-type default
-    name: str = ""            # display label (shown in ConnectionBar)
+    name: str = ""  # display label (shown in ConnectionBar)
     nmea: bool = False
-    device: str = ""          # serial port for nmea/civ_proxy sink
-    baudrate: int = 4800       # serial baud rate for nmea/civ_proxy sink
-    rig_addr: int = 0          # CI-V address override (0 = auto from rig_name)
-    rig_name: str = ""         # rig model for CI-V address lookup
-    callsign: str = ""        # APRS-IS callsign (aprsis sink)
-    server: str = ""           # APRS-IS server host (aprsis sink)
-    passcode: str = ""         # APRS-IS passcode (aprsis sink)
-    comment: str = "rigtop"   # beacon comment (aprsis sink)
-    interval: int = 120        # beacon interval seconds (aprsis sink)
-    aprs_filter: str = ""     # APRS-IS server filter (e.g. r/59.2/18.1/200)
+    device: str = ""  # serial port for nmea/civ_proxy sink
+    baudrate: int = 4800  # serial baud rate for nmea/civ_proxy sink
+    rig_addr: int = 0  # CI-V address override (0 = auto from rig_name)
+    rig_name: str = ""  # rig model for CI-V address lookup
+    callsign: str = ""  # APRS-IS callsign (aprsis sink)
+    server: str = ""  # APRS-IS server host (aprsis sink)
+    passcode: str = ""  # APRS-IS passcode (aprsis sink)
+    comment: str = "rigtop"  # beacon comment (aprsis sink)
+    interval: int = 120  # beacon interval seconds (aprsis sink)
+    aprs_filter: str = ""  # APRS-IS server filter (e.g. r/59.2/18.1/200)
 
     _PORT_DEFAULTS: dict[str, int] = {
         "aprsis": 14580,

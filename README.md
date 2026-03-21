@@ -126,7 +126,7 @@ QSY rig to the APRS frequency and mode when `:aprs on` is used. Optional.
 
 ```toml
 [aprs]
-enabled = false       # true = QSY on startup; false = only on :aprs on
+enabled = false       # QSY only happens on :aprs on
 freq = 144.800        # MHz (EU: 144.800, NA: 144.390)
 qsy_mode = "FM"
 ```
@@ -137,7 +137,7 @@ Quick QSY to a packet BBS frequency via `:packet on`. Saves and restores previou
 
 ```toml
 [bbs]
-enabled = false       # true = QSY on startup; false = only on :packet on
+enabled = false       # QSY currently only happens on :packet on
 freq = 144.675        # packet frequency in MHz
 mode = "PKTFM"        # rig mode (PKTFM = 1200 baud FM)
 ```

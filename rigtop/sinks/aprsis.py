@@ -20,9 +20,7 @@ from rigtop.sources import Position
 
 # APRS message format:  SENDER>PATH::DEST     :text{msgno}
 # Dest callsign is padded to 9 characters with spaces.
-_MSG_RE = re.compile(
-    r"^(?P<sender>[^>]+)>[^:]*::(?P<dest>.{9}):(?P<body>.*)$"
-)
+_MSG_RE = re.compile(r"^(?P<sender>[^>]+)>[^:]*::(?P<dest>.{9}):(?P<body>.*)$")
 _ACK_RE = re.compile(r"^ack(?P<msgno>\w+)$")
 _REJ_RE = re.compile(r"^rej(?P<msgno>\w+)$")
 
@@ -79,14 +77,14 @@ class AprsIsSink(PositionSink):
         self._stop_event = threading.Event()
         self._beacon_enabled = True
         self._last_beacon = 0.0
-        self._last_rx: float = 0.0    # monotonic time of last received packet
-        self._rx_count: int = 0       # total received packets
+        self._last_rx: float = 0.0  # monotonic time of last received packet
+        self._rx_count: int = 0  # total received packets
         self._lock = threading.Lock()
         self.aprs_buffer = None  # set by main.py to share with TUI
-        self.msg_buffer = None   # MessageBuffer, set by cli.py
+        self.msg_buffer = None  # MessageBuffer, set by cli.py
 
         # Messaging state
-        self._msg_seq = 0       # outgoing message sequence number
+        self._msg_seq = 0  # outgoing message sequence number
         self._pending_acks: dict[str, tuple[str, str, int, float]] = {}
         # {msgno: (dest, text, retries_left, next_retry_time)}
         self._retry_interval = 30.0
@@ -263,7 +261,10 @@ class AprsIsSink(PositionSink):
             logger.info("APRS msg sent to {}: {} {{{}}}", dest, text, msgno)
             # Track for ack
             self._pending_acks[msgno] = (
-                dest, text, self._max_retries, time.monotonic() + self._retry_interval
+                dest,
+                text,
+                self._max_retries,
+                time.monotonic() + self._retry_interval,
             )
             if self.msg_buffer is not None:
                 self.msg_buffer.push_tx(dest.upper(), text, msgno)
@@ -292,9 +293,7 @@ class AprsIsSink(PositionSink):
             try:
                 sock.sendall(packet.encode("ascii"))
                 logger.debug("APRS msg retry to {} msgno={}", dest, msgno)
-                self._pending_acks[msgno] = (
-                    dest, text, retries - 1, now + self._retry_interval
-                )
+                self._pending_acks[msgno] = (dest, text, retries - 1, now + self._retry_interval)
             except OSError:
                 break
         for msgno in expired:

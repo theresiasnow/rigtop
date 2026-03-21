@@ -54,10 +54,12 @@ class WsjtxSink(PositionSink):
         return f"wsjtx@{self.host}:{self.port}"
 
     def connections(self) -> list[dict]:
-        return [{
-            "label": "wsjtx",
-            "kind": "udp",
-            "status": "ready" if self._sock else "closed",
-            "address": f"{self.host}:{self.port}",
-            "clients": [f"grid {self._last_grid}"] if self._last_grid else [],
-        }]
+        return [
+            {
+                "label": "wsjtx",
+                "kind": "udp",
+                "status": "ready" if self._sock else "closed",
+                "address": f"{self.host}:{self.port}",
+                "clients": [f"grid {self._last_grid}"] if self._last_grid else [],
+            }
+        ]

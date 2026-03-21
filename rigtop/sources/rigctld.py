@@ -205,6 +205,11 @@ class RigctldSource(GpsSource):
                 result[lvl] = val
         return result
 
+    def set_level(self, level: str, value: float) -> bool:
+        """Set a rig level (e.g. 'AF', 'RF', 'SQL', 'ATT'). Returns True on success."""
+        resp = self._send_command(f"+L {level} {value}")
+        return "RPRT 0" in resp
+
     def set_mode(self, mode: str, passband: int = 0) -> bool:
         """Set rig mode (e.g. FM, USB, LSB, CW). Returns True on success."""
         resp = self._send_command(f"+M {mode} {passband}")
@@ -218,6 +223,24 @@ class RigctldSource(GpsSource):
     def set_ptt(self, on: bool) -> bool:
         """Set PTT state. *on*=True → TX, *on*=False → RX. Returns True on success."""
         resp = self._send_command(f"+T {1 if on else 0}")
+        return "RPRT 0" in resp
+
+    def get_func(self, func: str) -> bool | None:
+        """Read a rig function (e.g. 'NB', 'NR'). Returns True/False/None on error."""
+        resp = self._send_command(f"+\\get_func {func}")
+        for line in resp.splitlines():
+            line = line.strip()
+            if line.startswith("Status:"):
+                return line.split(":", 1)[1].strip() != "0"
+            try:
+                return int(line) != 0
+            except ValueError:
+                continue
+        return None
+
+    def set_func(self, func: str, on: bool) -> bool:
+        """Set a rig function on or off (e.g. 'NB', 'NR'). Returns True on success."""
+        resp = self._send_command(f"+U {func} {1 if on else 0}")
         return "RPRT 0" in resp
 
     def connections(self) -> list[dict]:
