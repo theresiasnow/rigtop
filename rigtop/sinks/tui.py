@@ -393,7 +393,7 @@ class RigCommandPanel(Widget):
         "PKTLSB",
     ]
     _ATT_STEPS: ClassVar[list[int]] = [0, 6, 12, 18]
-    _PRE_STEPS: ClassVar[list[int]] = [0, 10]  # off / on (hamlib expects 0 or dB value)
+    _PRE_STEPS: ClassVar[list[int]] = [0, 1]  # off / on — hamlib uses index (0=off, 1=preamp 1)
     _DATA_ON: ClassVar[dict[str, str]] = {"FM": "PKTFM", "USB": "PKTUSB", "LSB": "PKTLSB"}
     _DATA_OFF: ClassVar[dict[str, str]] = {"PKTFM": "FM", "PKTUSB": "USB", "PKTLSB": "LSB"}
 
@@ -546,6 +546,7 @@ class RigCommandPanel(Widget):
                 self.post_message(self.ControlChanged("ATT", val))
             else:
                 self._att_idx = (self._att_idx - 1) % len(self._ATT_STEPS)  # revert
+                self.notify("ATT: not settable via hamlib for this rig", severity="warning")
         elif btn_id == "pre-btn":
             self._pre_idx = (self._pre_idx + 1) % len(self._PRE_STEPS)
             val = float(self._PRE_STEPS[self._pre_idx])
