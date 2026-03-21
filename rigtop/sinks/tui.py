@@ -378,6 +378,8 @@ class RigCommandPanel(Widget):
     ]
     _ATT_STEPS: ClassVar[list[int]] = [0, 6, 12, 18]
     _PRE_STEPS: ClassVar[list[int]] = [0, 10, 20]
+    _DATA_ON:  ClassVar[dict[str, str]] = {"FM": "PKTFM", "USB": "PKTUSB", "LSB": "PKTLSB"}
+    _DATA_OFF: ClassVar[dict[str, str]] = {"PKTFM": "FM", "PKTUSB": "USB", "PKTLSB": "LSB"}
 
     def __init__(self, rig, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -387,6 +389,7 @@ class RigCommandPanel(Widget):
         self._pre_idx: int = 0
         self._nb_on: bool = False
         self._nr_on: bool = False
+        self._data_on: bool = False
         self._updating = False
 
     def compose(self) -> ComposeResult:
@@ -398,8 +401,9 @@ class RigCommandPanel(Widget):
         yield Select([(m, m) for m in self._MODES], id="mode-sel")
         yield Button("ATT: off", id="att-btn", classes="cycle")
         yield Button("Pre: off", id="pre-btn", classes="cycle")
-        yield Button("NB: off",  id="nb-btn",  classes="cycle")
-        yield Button("NR: off",  id="nr-btn",  classes="cycle")
+        yield Button("NB: off",  id="nb-btn",   classes="cycle")
+        yield Button("NR: off",  id="nr-btn",   classes="cycle")
+        yield Button("Data: off", id="data-btn", classes="cycle")
 
     def render_data(
         self,
@@ -428,6 +432,13 @@ class RigCommandPanel(Widget):
             pass
         finally:
             self._updating = False
+
+        if mode:
+            self._data_on = mode in self._DATA_OFF
+            try:
+                self.query_one("#data-btn", Button).label = self._data_label()
+            except Exception:
+                pass
 
         att_raw = controls.get("ATT")
         if att_raw is not None:
@@ -481,6 +492,9 @@ class RigCommandPanel(Widget):
     def _nr_label(self) -> str:
         return "NR: on" if self._nr_on else "NR: off"
 
+    def _data_label(self) -> str:
+        return "Data: on" if self._data_on else "Data: off"
+
     @on(Button.Pressed)
     def _handle_button(self, event: Button.Pressed) -> None:
         btn_id = str(event.button.id)
@@ -512,6 +526,15 @@ class RigCommandPanel(Widget):
                 self.query_one("#nr-btn", Button).label = self._nr_label()
             else:
                 self._nr_on = not self._nr_on  # revert on failure
+        elif btn_id == "data-btn":
+            cur = self._rig.get_mode() or ""
+            if self._data_on:
+                target = self._DATA_OFF.get(cur)
+            else:
+                target = self._DATA_ON.get(cur)
+            if target and self._rig.set_mode(target):
+                self._data_on = not self._data_on
+                self.query_one("#data-btn", Button).label = self._data_label()
 
     @on(Select.Changed, "#mode-sel")
     def _mode_changed(self, event: Select.Changed) -> None:
