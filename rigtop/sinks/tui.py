@@ -271,7 +271,7 @@ class CommandSuggester(Suggester):
         "freq":   [],
         "help":   [],
         "beacon": ["on", "off"],
-        "igate":  ["on", "off"],
+
         "info":   [],
         "mode":   ["USB", "LSB", "FM", "AM", "CW", "CWR", "PKTUSB", "PKTLSB", "PKTFM"],
         "msg":    ["<CALL> <text>"],
@@ -706,7 +706,7 @@ class RigtopApp(App[None]):
             yield Label("❯ ", id="cmd-prompt")
             yield Input(
                 placeholder=(
-                    "aprs | packet | aprsis | wsjtx | nmea | gpsd | civ | igate | beacon on/off"
+                    "aprs | packet | aprsis | wsjtx | nmea | gpsd | civ | beacon on/off"
                     "  •  send CALL text  •  freq  •  mode  •  q"
                 ),
                 id="cmd-input",
@@ -991,7 +991,6 @@ class RigtopApp(App[None]):
             "data":   self._cmd_data,
             "dw":     self._cmd_dw,
             "beacon": self._cmd_beacon,
-            "igate":  self._cmd_igate,
             "freq":   self._cmd_freq,
             "mode":   self._cmd_mode,
             "msg":    self._cmd_msg,
@@ -1285,28 +1284,6 @@ class RigtopApp(App[None]):
         else:
             self.notify("Usage: beacon [on|off]", severity="warning")
 
-    def _cmd_igate(self, args: list[str]) -> None:
-        sinks = [s for s in self._sinks if type(s).__name__ == "AprsIsSink"]
-        if not sinks:
-            self.notify("No APRS-IS sink configured", severity="warning")
-            return
-        if not args:
-            state = "ON" if sinks[0].connected else "OFF"
-            self.notify(f"IGate: {state}")
-            return
-        action = args[0].lower()
-        if action == "on":
-            for s in sinks:
-                if not s.connected:
-                    s.start()
-            self.notify("IGate ON")
-        elif action == "off":
-            for s in sinks:
-                s.close()
-            self.notify("IGate OFF")
-        else:
-            self.notify("Usage: igate [on|off]", severity="warning")
-
     def _cmd_freq(self, args: list[str]) -> None:
         if self._rig is None:
             self.notify("No rig", severity="error")
@@ -1379,7 +1356,7 @@ class RigtopApp(App[None]):
             "beacon [on|off]", "wsjtx [on|off]",
             "nmea [on|off] (NMEA sentences)", "gpsd [on|off] (gpsd server)",
             "civ [on|off]", "data [on|off]", "dw [aprs]", "freq <MHz>",
-            "igate [on|off]", "mode <MODE>", "send <CALL> <text>", "info", "scan", "q",
+            "mode <MODE>", "send <CALL> <text>", "info", "scan", "q",
         )
         self.notify("  ".join(cmds), title="Commands", timeout=8)
 
