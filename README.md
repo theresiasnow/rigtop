@@ -468,6 +468,54 @@ rigtop/
     civ_proxy.py           CivProxySink — Icom CI-V serial proxy
 ```
 
+## Contributing
+
+### Commit style
+
+rigtop uses [Conventional Commits](https://www.conventionalcommits.org/). Every commit message must follow the pattern:
+
+```
+<type>: <description>
+
+# Examples
+feat: add CI-V proxy sink
+fix: poll worker exits cleanly when app stops
+chore: update dependencies
+docs: fix README command table
+refactor: move enabled flag to PositionSink base class
+```
+
+Types: `feat`, `fix`, `docs`, `refactor`, `chore`, `test`, `ci`, `perf`.
+Commit messages are validated automatically on every PR by the `commit-lint` CI job.
+
+### Releasing
+
+Version numbers follow [Semantic Versioning](https://semver.org/). While the project is pre-1.0:
+
+| Commit type | Version bump |
+|-------------|-------------|
+| `fix:` | patch — 0.3.0 → 0.3.1 |
+| `feat:` | minor — 0.3.0 → 0.4.0 |
+| `BREAKING CHANGE` footer | minor (no 1.0 surprise before it's ready) |
+
+**To cut a release** — go to [Actions → Bump version](../../actions/workflows/bump.yml) and click **Run workflow**. Leave *increment* blank to let commitizen infer it from commits since the last tag, or pick `patch`/`minor`/`major` to override.
+
+This runs `cz bump`, which:
+1. Determines the next version from commit history
+2. Updates `version` in `pyproject.toml`
+3. Appends an entry to `CHANGELOG.md`
+4. Creates a commit and a `vX.Y.Z` tag
+
+The pushed tag triggers the **Release** workflow, which builds the sdist + wheel and publishes a GitHub release with auto-generated notes.
+
+**Or locally:**
+
+```bash
+uv run cz bump          # auto bump
+uv run cz bump --increment minor   # force minor bump
+git push --follow-tags  # triggers release workflow
+```
+
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md) for the phased development plan, feature ideas, and
