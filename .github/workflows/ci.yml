@@ -11,6 +11,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  commit-lint:
+    name: Commit messages
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.14
+        run: uv python install 3.14
+
+      - name: Install dev dependencies
+        run: uv sync --group dev
+
+      - name: Check commit messages
+        run: uv run cz check --rev-range ${{ github.event.pull_request.base.sha }}..${{ github.sha }}
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -61,8 +84,9 @@ jobs:
         run: |
           uv run python -c "
           import rigtop
+          print(f'rigtop {rigtop.__version__}')
           from rigtop.config import load_config, Config
-          from rigtop.sinks.tui import TuiSink
+          from rigtop.sinks.tui import RigtopApp
           from rigtop.sources.rigctld import RigctldSource
           from rigtop.geo import maidenhead
           from rigtop.zones import lookup as zone_lookup
@@ -71,8 +95,11 @@ jobs:
           print(f'Default config: rig={c.rig.host}:{c.rig.port}  sinks={[s.type for s in c.sinks]}')
           "
 
+      - name: CLI --version
+        run: uv run rigtop --version
+
       - name: CLI --help
-        run: uv run python -m rigtop --help
+        run: uv run rigtop --help
 
   test:
     name: Tests (Python ${{ matrix.python }}, ${{ matrix.os }})

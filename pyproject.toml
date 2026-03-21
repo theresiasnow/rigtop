@@ -21,6 +21,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "commitizen>=4.0",
     "pylint>=3.0",
     "pytest>=8.0",
     "ruff>=0.15.6",
@@ -61,6 +62,12 @@ ignore = [
     "PIE790",  # unnecessary pass (intentional in ABCs)
     "G004",    # f-string in logging — loguru uses f-strings intentionally
 ]
+
+[tool.commitizen]
+version_provider = "pep621"   # reads/writes [project] version in this file
+tag_format = "v$version"
+update_changelog_on_bump = true
+major_version_zero = true     # 0.x.y: feat → minor, fix → patch (no 1.0 surprise)
 
 [tool.pylint.main]
 py-version = "3.14"

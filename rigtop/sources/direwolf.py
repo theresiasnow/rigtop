@@ -112,7 +112,9 @@ class DirewolfClient:
     def start(self) -> None:
         self._stop.clear()
         self._thread = threading.Thread(
-            target=self._run, daemon=True, name="direwolf-kiss",
+            target=self._run,
+            daemon=True,
+            name="direwolf-kiss",
         )
         self._thread.start()
 
@@ -203,8 +205,10 @@ class DirewolfClient:
             self._sock = None
 
     def connections(self) -> list[dict]:
-        status = "receiving" if self._connected and self._rx_count else (
-            "open" if self._connected else "closed"
+        status = (
+            "receiving"
+            if self._connected and self._rx_count
+            else ("open" if self._connected else "closed")
         )
         return [
             {

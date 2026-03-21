@@ -31,6 +31,7 @@ from rigtop.sources.rigctld import RigctldSource
 # Resources dataclass — everything that needs to be shut down on exit
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class AppResources:
     rig: RigctldSource
@@ -46,51 +47,75 @@ class AppResources:
 # CLI argument parser
 # ---------------------------------------------------------------------------
 
+
 def build_parser() -> argparse.ArgumentParser:
+    from rigtop import __version__
+
     parser = argparse.ArgumentParser(
         prog="rigtop",
         description="Ham radio rig dashboard — GPS, frequency, mode, meters.\n"
-                    "Configure sinks and settings in rigtop.toml.",
+        "Configure sinks and settings in rigtop.toml.",
     )
+    parser.add_argument("--version", action="version", version=f"rigtop {__version__}")
     parser.add_argument(
-        "-c", "--config", type=Path, default=None,
+        "-c",
+        "--config",
+        type=Path,
+        default=None,
         help="Path to TOML config file (auto-discovers rigtop.toml)",
     )
     parser.add_argument(
-        "--log-level", default=None,
+        "--log-level",
+        default=None,
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Log level (also controls rigctld verbosity)",
     )
     parser.add_argument(
-        "--console", action="store_true", default=False,
+        "--console",
+        action="store_true",
+        default=False,
         help="Use plain console output instead of TUI",
     )
     parser.add_argument(
-        "--once", action="store_true", default=None,
+        "--once",
+        action="store_true",
+        default=None,
         help="Read position once and exit",
     )
     parser.add_argument(
-        "--no-rigctld", action="store_true", default=False,
+        "--no-rigctld",
+        action="store_true",
+        default=False,
         help="Don't auto-start rigctld (assume it's already running)",
     )
     parser.add_argument(
-        "--no-direwolf", action="store_true", default=False,
+        "--no-direwolf",
+        action="store_true",
+        default=False,
         help="Don't auto-start Direwolf (assume it's already running)",
     )
     parser.add_argument(
-        "--no-gps", action="store_true", default=False,
+        "--no-gps",
+        action="store_true",
+        default=False,
         help="Disable GPS fallback even if configured",
     )
     parser.add_argument(
-        "--no-meters", action="store_true", default=False,
+        "--no-meters",
+        action="store_true",
+        default=False,
         help="Disable rig meters",
     )
     parser.add_argument(
-        "--no-beacon", action="store_true", default=False,
+        "--no-beacon",
+        action="store_true",
+        default=False,
         help="Disable APRS-IS position beaconing (still receives traffic)",
     )
     parser.add_argument(
-        "--scan", action="store_true", default=False,
+        "--scan",
+        action="store_true",
+        default=False,
         help="Scan LAN for radios and rigctld instances, then exit",
     )
     return parser
@@ -99,6 +124,7 @@ def build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 # Startup phases
 # ---------------------------------------------------------------------------
+
 
 def _setup_logging(cfg: Config) -> None:
     logger.remove()
@@ -355,6 +381,7 @@ def _shutdown(res: AppResources) -> None:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
@@ -362,6 +389,7 @@ def main() -> None:
     # --- LAN scan mode ---
     if args.scan:
         from rigtop.discovery import format_results, scan_lan
+
         print("Scanning LAN for radio services…")
         results = scan_lan(
             progress_cb=lambda done, total: print(f"  {done}/{total}", end="\r"),
@@ -398,8 +426,15 @@ def main() -> None:
 
     # Wire TUI sink
     _wire_tui_sink(
-        sinks, rig, cfg, dw_launcher, dw_buffer, rigctld_buffer,
-        aprs_buf, msg_buf, dw_client,
+        sinks,
+        rig,
+        cfg,
+        dw_launcher,
+        dw_buffer,
+        rigctld_buffer,
+        aprs_buf,
+        msg_buf,
+        dw_client,
     )
 
     # [6/8] QSY
@@ -429,6 +464,7 @@ def main() -> None:
     try:
         if tui_sink is not None:
             from rigtop.sinks.tui import RigtopApp
+
             app = RigtopApp(
                 rig=rig,
                 sinks=sinks,
@@ -451,7 +487,8 @@ def main() -> None:
             app.run()
         else:
             run(
-                rig, sinks,
+                rig,
+                sinks,
                 interval=cfg.interval,
                 once=cfg.once,
                 meters=cfg.meters,

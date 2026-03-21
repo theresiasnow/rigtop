@@ -77,9 +77,7 @@ def create_sink(config: dict[str, Any]) -> PositionSink:
     cls = _SINK_TYPES.get(sink_type)
     if cls is None:
         available = ", ".join(sorted(_SINK_TYPES))
-        raise ValueError(
-            f"Unknown sink type '{sink_type}'. Available: {available}"
-        )
+        raise ValueError(f"Unknown sink type '{sink_type}'. Available: {available}")
     kwargs = {k: v for k, v in config.items() if k != "type"}
     # Only pass kwargs the constructor actually accepts.
     sig = inspect.signature(cls.__init__)

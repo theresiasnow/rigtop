@@ -18,6 +18,7 @@ Auto-starts `rigctld`, auto-falls back to GPS2IP when the rig has no GPS fix.
 - **WSJT-X** — sends Maidenhead grid locator via UDP
 - **Console** — plain text output mode with optional NMEA sentences
 - **rigctld launcher** — auto-starts rigctld from config (model, serial port, baud, PTT)
+- **CI-V proxy** — Icom CI-V serial proxy so HRD/other CAT software shares the rig via rigctld
 - **TUI commands** — vim-style `:command` interface for rig control, APRS toggling, log filtering
 - **TX watchdog** — forces PTT off if the radio transmits continuously beyond a timeout (protects against stuck TX)
 
@@ -75,8 +76,8 @@ See [rigtop.example.toml](rigtop.example.toml) for a fully commented reference.
 ```toml
 [general]
 interval = 2.0        # poll interval in seconds
-once = false           # read once and exit
-meters = true          # show rig meters
+once = false          # read once and exit
+meters = true         # show rig meters
 log_level = "WARNING"  # DEBUG, INFO, WARNING, ERROR
 ```
 
@@ -121,12 +122,36 @@ port = 11123
 
 ### APRS settings
 
-QSY rig to the APRS frequency and mode on startup. Optional.
+QSY rig to the APRS frequency and mode when `:aprs on` is used. Optional.
 
 ```toml
 [aprs]
+enabled = false       # QSY only happens on :aprs on
 freq = 144.800        # MHz (EU: 144.800, NA: 144.390)
 qsy_mode = "FM"
+```
+
+### Packet BBS
+
+Quick QSY to a packet BBS frequency via `:packet on`. Saves and restores previous freq/mode. Optional.
+
+```toml
+[bbs]
+enabled = false       # QSY currently only happens on :packet on
+freq = 144.675        # packet frequency in MHz
+mode = "PKTFM"        # rig mode (PKTFM = 1200 baud FM)
+```
+
+### Static GPS position
+
+Hard-coded position used when neither rig GPS nor fallback have a fix. Useful for fixed/home stations.
+
+```toml
+[gps_static]
+enabled = true
+lat = 59.329          # latitude (decimal degrees)
+lon = 18.069          # longitude (decimal degrees)
+alt = 28.0            # altitude in metres (optional)
 ```
 
 ### Direwolf
@@ -157,7 +182,8 @@ tx_timeout = 120   # seconds (minimum 10, default 120)
 ### Sinks
 
 Sinks are output destinations. Use `[[sink]]` (double brackets) for each one.
-Multiple sinks run simultaneously. Set `enabled = false` to disable without removing.
+Multiple sinks run simultaneously. Set `enabled = false` to disable a sink without removing it.
+Add `name = "label"` to distinguish multiple instances of the same type in the connection bar.
 
 ```toml
 # Full-screen TUI dashboard (default)
@@ -172,6 +198,7 @@ port = 2237
 # NMEA GPS feed via serial (Windows — virtual COM port pair)
 [[sink]]
 type = "nmea"
+name = "Direwolf"
 device = "COM10"      # rigtop writes here; consumer reads the other end
 
 # NMEA GPS feed via TCP (Linux)
@@ -187,12 +214,20 @@ port = 2947           # gpspipe -w localhost:2947
 # APRS-IS beacon + receiver
 [[sink]]
 type = "aprsis"
+enabled = false       # set true to connect at startup
 callsign = "N0CALL-1"
 server = "euro.aprs2.net"
 passcode = "12345"
 interval = 120                      # beacon interval in seconds (min 30)
 comment = "rigtop"
 aprs_filter = "r/59.2/18.1/200"    # server filter (blank = auto from GPS)
+
+# Icom CI-V proxy — lets HRD/other CAT software share the rig via rigctld
+# [[sink]]
+# type = "civ_proxy"
+# device = "COM14"      # virtual serial port (rigtop writes here)
+# baudrate = 19200
+# rig_name = "IC-705"   # used for auto CI-V address lookup
 
 # Plain console output
 # [[sink]]
@@ -210,6 +245,7 @@ aprs_filter = "r/59.2/18.1/200"    # server filter (blank = auto from GPS)
 | `nmea` | TCP or serial | 10110 | NMEA GGA+RMC sentences for Direwolf, PinPoint, etc. |
 | `gpsd` | TCP (JSON) | 2947 | gpsd protocol 3.x server for Xastir, YAAC, cgps |
 | `aprsis` | TCP | 14580 | APRS-IS position beacon + traffic receiver |
+| `civ_proxy` | serial | — | Icom CI-V proxy — share rig with HRD/other CAT via rigctld |
 
 ### NMEA sink
 
@@ -233,7 +269,8 @@ Connects to an APRS-IS Tier 2 server and:
 - **Receives** nearby APRS traffic using a server-side filter
 - Auto-generates a range filter from the first beacon position if none is configured
 - Displays incoming traffic in a dedicated TUI pane
-- Tracks receive count and connection status (shown in title bar badges)
+- Tracks receive count and connection status; shows **APRS IG** badge in title bar when connected
+- `:beacon on/off` controls outgoing position sends without disconnecting the receiver
 
 ## TUI commands
 
@@ -245,10 +282,14 @@ The TUI uses a vim-style command interface. Press `:` to enter command mode.
 | `:mode` | `[MODE [passband]]` | Show or set rig mode (FM, USB, LSB, CW, AM, …) |
 | `:data` | `[on\|off]` | Toggle data mode (e.g. USB → PKTUSB, FM → PKTFM) |
 | `:aprs` | `[on\|off]` | Show status or toggle all APRS sinks (NMEA + APRS-IS) |
-| `:igate` | `[on\|off]` | Show status or toggle APRS-IS gateway only |
-| `:bbs` | `[on\|off]` | QSY to packet BBS frequency/mode and start Direwolf |
+| `:aprsis` | `[on\|off]` | Toggle APRS-IS (internet gateway) only |
+| `:packet` | `[on\|off]` | QSY to packet BBS frequency/mode and start Direwolf |
+| `:nmea` | `[on\|off]` | Toggle all NMEA sinks |
+| `:gpsd` | `[on\|off]` | Toggle gpsd server sink |
+| `:civ` | `[on\|off]` | Toggle CI-V proxy sink |
+| `:beacon` | `[on\|off]` | Enable/disable outgoing APRS-IS position beacon |
 | `:dw` | `[aprs\|bbs]` | Show Direwolf status or switch config profile |
-| `:msg` | `CALL text` | Send an APRS message via APRS-IS |
+| `:msg` / `:send` | `CALL text` | Send an APRS message via APRS-IS |
 | `:scan` | | Scan LAN for radio services (rigctld, etc.) |
 | `:info` | | Show rig connection info, frequency, mode, grid |
 | `:help` | | Show command list |
@@ -260,10 +301,10 @@ Tab completion is supported. Press `Esc` to cancel.
 
 | Badge | Colour | Meaning |
 |-------|--------|---------|
-| **RF** | red | NMEA sink connected (Direwolf/PinPoint receiving GPS) |
-| **IS** | green | APRS-IS connected and receiving traffic |
-| **IS** | yellow | APRS-IS connected but no recent traffic (>5 min) |
-| **WD** | red blink | TX watchdog tripped — PTT was forced off |
+| **APRS RF** | — | NMEA sink active; Direwolf/PinPoint receiving GPS |
+| **APRS IG** | — | APRS-IS internet gateway connected |
+| **APRS** | — | APRS mode active without IS or RF detail |
+| **⚠ WATCHDOG** | — | TX watchdog tripped — PTT was forced off |
 
 ### TUI panels
 
@@ -402,12 +443,15 @@ Logs are written to `rigtop.log` in the current directory (5 MB rotation, 3 file
 ## Project structure
 
 ```
-main.py                    Entry point, CLI parsing, sink/source wiring
 rigtop/
-  app.py                   Main polling loop, key listener, reconnection
+  cli.py                   Entry point, CLI parsing, sink/source wiring
+  app.py                   Poll loop, TxWatchdog, resolve_position, collect_meters
   config.py                TOML config loader, Pydantic models
   geo.py                   Maidenhead, NMEA sentence builders, coordinate formatting
+  zones.py                 CQ/IARU zone + country lookup from lat/lon
   rigctld_launcher.py      Spawn and manage rigctld subprocess
+  direwolf_launcher.py     Start/stop Direwolf via winpty (Windows PTY)
+  discovery.py             LAN scan for radio services
   sources/
     __init__.py            Position dataclass, GpsSource ABC, registry
     rigctld.py             RigctldSource — rig GPS, freq, mode, meters, PTT
@@ -415,12 +459,61 @@ rigtop/
     direwolf.py            DirewolfClient — KISS TCP client for RF decodes
   sinks/
     __init__.py            PositionSink ABC, registry, create_sink factory
-    tui.py                 TuiSink — rich full-screen dashboard
+    tui.py                 RigtopApp — rich full-screen Textual dashboard
     console.py             ConsoleSink — plain text output
     nmea.py                NmeaSink — NMEA GGA+RMC via serial or TCP
     gpsd.py                GpsdSink — gpsd JSON protocol server
     wsjtx.py               WsjtxSink — WSJT-X grid via UDP
     aprsis.py              AprsIsSink — APRS-IS beacon + receiver
+    civ_proxy.py           CivProxySink — Icom CI-V serial proxy
+```
+
+## Contributing
+
+### Commit style
+
+rigtop uses [Conventional Commits](https://www.conventionalcommits.org/). Every commit message must follow the pattern:
+
+```
+<type>: <description>
+
+# Examples
+feat: add CI-V proxy sink
+fix: poll worker exits cleanly when app stops
+chore: update dependencies
+docs: fix README command table
+refactor: move enabled flag to PositionSink base class
+```
+
+Types: `feat`, `fix`, `docs`, `refactor`, `chore`, `test`, `ci`, `perf`.
+Commit messages are validated automatically on every PR by the `commit-lint` CI job.
+
+### Releasing
+
+Version numbers follow [Semantic Versioning](https://semver.org/). While the project is pre-1.0:
+
+| Commit type | Version bump |
+|-------------|-------------|
+| `fix:` | patch — 0.3.0 → 0.3.1 |
+| `feat:` | minor — 0.3.0 → 0.4.0 |
+| `BREAKING CHANGE` footer | minor (no 1.0 surprise before it's ready) |
+
+**To cut a release** — go to [Actions → Bump version](../../actions/workflows/bump.yml) and click **Run workflow**. Leave *increment* blank to let commitizen infer it from commits since the last tag, or pick `patch`/`minor`/`major` to override.
+
+This runs `cz bump`, which:
+1. Determines the next version from commit history
+2. Updates `version` in `pyproject.toml`
+3. Appends an entry to `CHANGELOG.md`
+4. Creates a commit and a `vX.Y.Z` tag
+
+The pushed tag triggers the **Release** workflow, which builds the sdist + wheel and publishes a GitHub release with auto-generated notes.
+
+**Or locally:**
+
+```bash
+uv run cz bump          # auto bump
+uv run cz bump --increment minor   # force minor bump
+git push --follow-tags  # triggers release workflow
 ```
 
 ## Roadmap

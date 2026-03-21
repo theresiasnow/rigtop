@@ -24,6 +24,7 @@ def _is_tui(sink: PositionSink) -> bool:
 # TX watchdog
 # ---------------------------------------------------------------------------
 
+
 class TxWatchdog:
     """Tracks TX duration and trips PTT off when the timeout is exceeded."""
 
@@ -68,7 +69,8 @@ class TxWatchdog:
                 self._tripped = True
                 logger.critical(
                     "TX WATCHDOG: transmitting for {:.0f}s (limit {}s) — forcing PTT off",
-                    tx_dur, self._cfg.tx_timeout,
+                    tx_dur,
+                    self._cfg.tx_timeout,
                 )
                 rig.set_ptt(False)
                 extras["ptt"] = False
@@ -80,6 +82,7 @@ class TxWatchdog:
 # ---------------------------------------------------------------------------
 # GPS resolution
 # ---------------------------------------------------------------------------
+
 
 def resolve_position(
     rig: RigctldSource,
@@ -103,6 +106,7 @@ def resolve_position(
 # Meters
 # ---------------------------------------------------------------------------
 
+
 def collect_meters(rig: RigctldSource) -> dict[str, float]:
     """Poll all rig meters and return a flat dict."""
     m: dict[str, float] = {}
@@ -119,6 +123,7 @@ def collect_meters(rig: RigctldSource) -> dict[str, float]:
 # ---------------------------------------------------------------------------
 # Console output (non-TUI mode)
 # ---------------------------------------------------------------------------
+
 
 def _print_cycle(
     now_str: str,
@@ -155,6 +160,7 @@ def _print_cycle(
 # ---------------------------------------------------------------------------
 # Key listener (console mode)
 # ---------------------------------------------------------------------------
+
 
 def _dispatch_key(ch: str, stop: threading.Event, tui_sink) -> bool:
     """Handle one keypress. Returns True if the stop event was set."""
@@ -198,6 +204,7 @@ def _key_listener(stop: threading.Event, tui_sink=None) -> None:
     """Background thread: ':q' to quit, route commands to TUI sink."""
     if sys.platform == "win32":
         import msvcrt
+
         while not stop.is_set():
             if msvcrt.kbhit():
                 ch = msvcrt.getwch()
@@ -208,6 +215,7 @@ def _key_listener(stop: threading.Event, tui_sink=None) -> None:
     else:
         import termios
         import tty
+
         fd = sys.stdin.fileno()
         old = termios.tcgetattr(fd)
         try:
@@ -223,6 +231,7 @@ def _key_listener(stop: threading.Event, tui_sink=None) -> None:
 # ---------------------------------------------------------------------------
 # Main polling loop
 # ---------------------------------------------------------------------------
+
 
 def run(
     rig: RigctldSource,
