@@ -272,8 +272,8 @@ class CommandSuggester(Suggester):
         "igate":  ["on", "off"],
         "info":   [],
         "mode":   ["USB", "LSB", "FM", "AM", "CW", "CWR", "PKTUSB", "PKTLSB", "PKTFM"],
-        "msg":    [],
-        "send":   [],
+        "msg":    ["<CALL> <text>"],
+        "send":   ["<CALL> <text>"],
         "q":      [],
         "quit":   [],
         "scan":   [],
@@ -678,7 +678,7 @@ class RigtopApp(App[None]):
         with Horizontal(id="cmd-bar"):
             yield Label("❯ ", id="cmd-prompt")
             yield Input(
-                placeholder="aprs on | packet on | wsjtx on | freq | mode | help | q",
+                placeholder="aprs on | send CALL text | freq | mode | help | q",
                 id="cmd-input",
                 suggester=CommandSuggester(),
             )
@@ -1287,7 +1287,7 @@ class RigtopApp(App[None]):
             "aprs [on|off]", "aprsis [on|off]", "packet [on|off]",
             "wsjtx [on|off]", "nmea [on|off]", "civ [on|off]",
             "data [on|off]", "dw [aprs]", "freq <MHz>", "igate [on|off]",
-            "mode <MODE>", "msg <CALL> <text>", "info", "scan", "q",
+            "mode <MODE>", "send <CALL> <text>", "info", "scan", "q",
         )
         self.notify("  ".join(cmds), title="Commands", timeout=8)
 
