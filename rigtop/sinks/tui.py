@@ -309,6 +309,33 @@ class CommandSuggester(Suggester):
 
 # ── Textual widgets ─────────────────────────────────────────────────────────
 
+class AprsPanel(Static):
+    """Bottom-left pane: live APRS traffic from buffer."""
+
+    def render_data(self, buf: AprsBuffer | None) -> None:
+        self.border_title = "APRS Traffic"
+        if buf is None:
+            txt = Text()
+            txt.append(" No APRS sink configured", style="dim")
+            self.update(txt)
+        else:
+            self.update(buf.render(max_lines=8))
+
+
+class MsgPanel(Static):
+    """Bottom-right pane: APRS message log (sent + received)."""
+
+    def render_data(self, buf: MessageBuffer | None) -> None:
+        unread = f"  {buf.unread} unread" if buf and buf.unread else ""
+        self.border_title = f"Messages{unread}"
+        if buf is None:
+            txt = Text()
+            txt.append(" No APRS-IS sink configured", style="dim")
+            self.update(txt)
+        else:
+            self.update(buf.render(max_lines=8))
+
+
 class RigPanel(Static):
     """Left/right top pane: frequency, mode, PTT state and meter bars."""
 
@@ -524,6 +551,24 @@ class RigtopApp(App[None]):
         height: 100%;
         overflow-y: auto;
     }
+    #aprs-row {
+        height: 9;
+        display: none;
+    }
+    AprsPanel {
+        width: 2fr;
+        border: round yellow;
+        padding: 0 1;
+        height: 100%;
+        overflow-y: auto;
+    }
+    MsgPanel {
+        width: 1fr;
+        border: round cyan;
+        padding: 0 1;
+        height: 100%;
+        overflow-y: auto;
+    }
     ConnectionBar {
         height: 8;
         padding: 0 1;
@@ -624,6 +669,9 @@ class RigtopApp(App[None]):
         with Horizontal(id="top-row"):
             yield RigPanel(id="rig-panel")
             yield StationPanel(id="station-panel")
+        with Horizontal(id="aprs-row"):
+            yield AprsPanel(id="aprs-panel")
+            yield MsgPanel(id="msg-panel")
         yield ConnectionBar(id="conn-bar")
         yield RichLog(id="dw-log", highlight=False, markup=False, auto_scroll=True)
         with Horizontal(id="cmd-bar"):
@@ -840,6 +888,11 @@ class RigtopApp(App[None]):
             pos, grid, gps_src, self._start_time, source_label, location,
         )
 
+        # Update APRS / messages panes when APRS mode is active
+        if self._aprs_active:
+            self.query_one(AprsPanel).render_data(self._aprs_buffer)
+            self.query_one(MsgPanel).render_data(self._msg_buffer)
+
         # Update IS badge
         aprs_is_connected = any(
             type(s).__name__ == "AprsIsSink" and s.connected for s in self._sinks
@@ -950,6 +1003,9 @@ class RigtopApp(App[None]):
                     s.start()
             self._aprs_active = True
             self._update_title()
+            self.query_one("#aprs-row").display = True
+            self.query_one(AprsPanel).render_data(self._aprs_buffer)
+            self.query_one(MsgPanel).render_data(self._msg_buffer)
             self._start_direwolf("aprs")
             msg = "APRS ON"
             if qsy:
@@ -960,6 +1016,7 @@ class RigtopApp(App[None]):
                 s.close()
             self._aprs_active = False
             self._update_title()
+            self.query_one("#aprs-row").display = False
             restored: list[str] = []
             if self._rig:
                 if self._saved_freq:
