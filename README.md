@@ -137,7 +137,7 @@ Quick QSY to a packet BBS frequency via `:packet on`. Saves and restores previou
 
 ```toml
 [bbs]
-enabled = false       # true = QSY on startup; false = only on :packet on
+enabled = false       # QSY currently only happens on :packet on
 freq = 144.675        # packet frequency in MHz
 mode = "PKTFM"        # rig mode (PKTFM = 1200 baud FM)
 ```
