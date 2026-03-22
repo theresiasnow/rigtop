@@ -1,6 +1,6 @@
 [project]
 name = "rigtop"
-version = "0.4.1"
+version = "0.5.0"
 description = "Ham radio rig dashboard — GPS, frequency, mode, meters via rigctld"
 readme = "README.md"
 requires-python = ">=3.14"

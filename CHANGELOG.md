@@ -1,3 +1,9 @@
+## v0.5.0 (2026-03-22)
+
+### Feat
+
+- **direwolf**: control TBEACON via rigtop-owned derived config
+
 ## v0.4.1 (2026-03-22)
 
 ### Fix
