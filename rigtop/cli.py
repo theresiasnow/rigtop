@@ -15,6 +15,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from loguru import logger
+from rich.console import Console
+from rich.markup import escape as _esc
+from rich.rule import Rule
 
 from rigtop.app import run
 from rigtop.config import Config, SinkConfig, load_config
@@ -26,6 +29,8 @@ from rigtop.sources import Position
 from rigtop.sources.direwolf import DirewolfClient
 from rigtop.sources.gps2ip import Gps2ipSource
 from rigtop.sources.rigctld import RigctldSource
+
+_console = Console(highlight=False)
 
 # ---------------------------------------------------------------------------
 # Resources dataclass — everything that needs to be shut down on exit
@@ -200,7 +205,7 @@ def _start_rigctld(cfg: Config) -> tuple[RigctldLauncher | None, DirewolfBuffer 
         return None, None
 
     rc = cfg.rigctld
-    print(f"[3/8] Starting rigctld (model {rc.model}, {rc.serial_port})…")
+    _console.print(f"  [cyan][3/8][/cyan] Starting rigctld (model {rc.model}, {rc.serial_port})…")
     buf = DirewolfBuffer()
     launcher = RigctldLauncher(
         model=rc.model,
@@ -223,7 +228,7 @@ def _start_rigctld(cfg: Config) -> tuple[RigctldLauncher | None, DirewolfBuffer 
     try:
         launcher.start()
     except (FileNotFoundError, RuntimeError) as e:
-        print(f"Error: {e}")
+        _console.print(f"  [bold red]✗  Error:[/bold red] {_esc(str(e))}")
         sys.exit(1)
     return launcher, buf
 
@@ -233,7 +238,7 @@ def _make_dw_launcher(
 ) -> tuple[DirewolfLauncher | None, DirewolfBuffer | None]:
     """Create a Direwolf launcher (started on-demand by :aprs / :packet)."""
     if cfg.direwolf is None or not cfg.direwolf.install_path:
-        print("[4/8] Direwolf launcher — disabled")
+        _console.print("  [cyan][4/8][/cyan] Direwolf launcher [dim]— disabled[/dim]")
         return None, None
 
     dwcfg = cfg.direwolf
@@ -243,7 +248,7 @@ def _make_dw_launcher(
     if dwcfg.packet_config:
         source_configs["packet"] = Path(dwcfg.packet_config)
 
-    print("[4/8] Direwolf launcher ready (on-demand)")
+    _console.print("  [cyan][4/8][/cyan] Direwolf launcher [green]ready[/green] (on-demand)")
     buf = DirewolfBuffer()
     launcher = DirewolfLauncher(
         install_path=dwcfg.install_path,
@@ -257,15 +262,20 @@ def _make_dw_launcher(
 
 def _connect_rig(cfg: Config, launcher: RigctldLauncher | None) -> RigctldSource:
     """Connect to rigctld; exit on failure."""
-    print(f"[5/8] Connecting to rig ({cfg.rig.name} @ {cfg.rig.host}:{cfg.rig.port})…")
+    _console.print(
+        f"  [cyan][5/8][/cyan] Connecting to rig"
+        f" ([bold]{_esc(cfg.rig.name)}[/bold] @ {cfg.rig.host}:{cfg.rig.port})…"
+    )
     rig = RigctldSource(host=cfg.rig.host, port=cfg.rig.port)
     try:
         rig.connect()
     except (ConnectionRefusedError, OSError) as e:
         if launcher:
             launcher.stop()
-        print(f"Error: Could not connect to rigctld at {cfg.rig.host}:{cfg.rig.port}")
-        print(f"       {e}")
+        _console.print(
+            f"  [bold red]✗  Error:[/bold red] Could not connect to rigctld"
+            f" at {cfg.rig.host}:{cfg.rig.port}\n         {_esc(str(e))}"
+        )
         sys.exit(1)
     return rig
 
@@ -304,10 +314,10 @@ def _wire_tui_sink(
 def _apply_qsy(cfg: Config, rig: RigctldSource) -> None:
     """QSY to APRS frequency/mode on startup if [aprs] is enabled."""
     if not (cfg.aprs and cfg.aprs.enabled):
-        print("[6/8] QSY — skipped (use :aprs on / :packet on)")
+        _console.print("  [cyan][6/8][/cyan] QSY [dim]— skipped (use :aprs on / :packet on)[/dim]")
         return
 
-    print(f"[6/8] QSY → {cfg.aprs.freq:.3f} MHz {cfg.aprs.qsy_mode}…")
+    _console.print(f"  [cyan][6/8][/cyan] QSY → {cfg.aprs.freq:.3f} MHz {cfg.aprs.qsy_mode}…")
     try:
         if cfg.aprs.freq > 0:
             freq_hz = int(cfg.aprs.freq * 1e6)
@@ -321,25 +331,32 @@ def _apply_qsy(cfg: Config, rig: RigctldSource) -> None:
             else:
                 logger.error("Failed to set mode {}", cfg.aprs.qsy_mode)
     except (ConnectionError, OSError) as e:
-        print(f"⚠  Radio not responding — is it powered on and connected? ({e})")
+        _console.print(
+            f"  [yellow]⚠  Radio not responding[/yellow]"
+            f" — is it powered on and connected? ({_esc(str(e))})"
+        )
         logger.warning("QSY failed — radio disconnected: {}", e)
 
 
 def _setup_gps_fallback(cfg: Config) -> Gps2ipSource | None:
     """Connect to the GPS fallback (gps2ip) if configured."""
     if cfg.gps_fallback is None or not cfg.gps_fallback.enabled:
-        print("[7/8] GPS fallback — disabled")
+        _console.print("  [cyan][7/8][/cyan] GPS fallback [dim]— disabled[/dim]")
         return None
 
-    print(f"[7/8] GPS fallback → {cfg.gps_fallback.host}:{cfg.gps_fallback.port}…")
+    _console.print(
+        f"  [cyan][7/8][/cyan] GPS fallback → {cfg.gps_fallback.host}:{cfg.gps_fallback.port}…"
+    )
     gps = Gps2ipSource(host=cfg.gps_fallback.host, port=cfg.gps_fallback.port, timeout=3.0)
     try:
         gps.connect()
     except (ConnectionRefusedError, TimeoutError, OSError) as e:
-        print(f"      GPS fallback unavailable ({e}) — skipping")
+        _console.print(
+            f"         [yellow]⚠  GPS fallback unavailable[/yellow] ({_esc(str(e))}) — skipping"
+        )
         return None
     else:
-        print("      GPS fallback connected")
+        _console.print("         [green]✓[/green] GPS fallback connected")
         return gps
 
 
@@ -367,26 +384,26 @@ def _start_sinks(
 
 
 def _shutdown(res: AppResources) -> None:
-    print("\nShutting down…")
-    print(f"  Closing rig connection ({res.rig})")
+    _console.print(Rule("[dim]Shutting down[/dim]", style="dim"))
+    _console.print(f"  [dim]Closing rig connection ({res.rig})[/dim]")
     res.rig.close()
     if res.dw_client:
-        print(f"  Stopping Direwolf KISS client ({res.dw_client})")
+        _console.print(f"  [dim]Stopping Direwolf KISS client ({res.dw_client})[/dim]")
         res.dw_client.close()
     if res.dw_launcher:
-        print("  Stopping Direwolf")
+        _console.print("  [dim]Stopping Direwolf[/dim]")
         res.dw_launcher.stop()
     if res.launcher:
-        print("  Stopping rigctld")
+        _console.print("  [dim]Stopping rigctld[/dim]")
         res.launcher.stop()
     if res.gps_fallback:
-        print("  Closing GPS fallback")
+        _console.print("  [dim]Closing GPS fallback[/dim]")
         res.gps_fallback.close()
     for sink in res.sinks:
         if not getattr(sink, "tui", False):
-            print(f"  Closing sink {sink}")
+            _console.print(f"  [dim]Closing sink {sink}[/dim]")
         sink.close()
-    print("Done.")
+    _console.print("[green]✓ Done.[/green]")
 
 
 # ---------------------------------------------------------------------------
@@ -402,21 +419,25 @@ def main() -> None:
     if args.scan:
         from rigtop.discovery import format_results, scan_lan
 
-        print("Scanning LAN for radio services…")
+        _console.print("[bold]Scanning LAN for radio services…[/bold]")
         results = scan_lan(
-            progress_cb=lambda done, total: print(f"  {done}/{total}", end="\r"),
+            progress_cb=lambda done, total: _console.print(
+                f"  [dim]{done}/{total}[/dim]", end="\r"
+            ),
         )
-        print(format_results(results))
+        _console.print(format_results(results))
         return
 
+    _console.print(Rule("[bold cyan]rigtop[/bold cyan] starting", style="cyan dim"))
+
     # [1/8] Config
-    print("[1/8] Loading config…")
+    _console.print("  [cyan][1/8][/cyan] Loading config…")
     cfg = load_config(args.config)
     cfg, beacon_disabled = _apply_cli_overrides(cfg, args)
     _setup_logging(cfg)
 
     # [2/8] Sinks
-    print("[2/8] Creating sinks…")
+    _console.print("  [cyan][2/8][/cyan] Creating sinks…")
     sinks, disabled_ids = _create_sinks(cfg)
 
     # Wire APRS-IS sink buffers
@@ -428,7 +449,7 @@ def main() -> None:
     # [3/8] rigctld
     launcher, rigctld_buffer = _start_rigctld(cfg)
     if launcher is None:
-        print("[3/8] rigctld — skipped (--no-rigctld)")
+        _console.print("  [cyan][3/8][/cyan] rigctld [dim]— skipped (--no-rigctld)[/dim]")
 
     # [4/8] Direwolf launcher
     config_dir = args.config.parent if args.config else Path.cwd()
@@ -457,7 +478,7 @@ def main() -> None:
     gps_fallback = _setup_gps_fallback(cfg)
 
     # [8/8] Start sinks
-    print("[8/8] Starting sinks…")
+    _console.print("  [cyan][8/8][/cyan] Starting sinks…")
     _start_sinks(sinks, dw_client, disabled_ids)
 
     static_pos = _build_static_pos(cfg)
@@ -472,7 +493,7 @@ def main() -> None:
         static_pos=static_pos,
     )
 
-    print("Ready ✓")
+    _console.print(Rule("[bold green]Ready ✓[/bold green]", style="green dim"))
     tui_sink = next((s for s in sinks if getattr(s, "tui", False)), None)
     try:
         if tui_sink is not None:
