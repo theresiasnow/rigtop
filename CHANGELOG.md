@@ -1,3 +1,9 @@
+## v0.4.1 (2026-03-22)
+
+### Fix
+
+- **tui**: make :beacon work without APRS-IS sink (Direwolf TBEACON)
+
 ## v0.4.0 (2026-03-21)
 
 ### Feat
