@@ -490,6 +490,7 @@ def main() -> None:
                 aprs_config=cfg.aprs,
                 packet_config=cfg.bbs,
                 rig_name=cfg.rig.name,
+                rig_config=cfg.rig,
                 interval=cfg.interval,
                 meters=cfg.meters,
                 gps_fallback=gps_fallback,

@@ -381,21 +381,7 @@ class RigControlPanel(Static, can_focus=True):
 class RigCommandPanel(Widget):
     """Freq step buttons, mode dropdown, ATT/Pre/NB/NR controls."""
 
-    _MODES: ClassVar[list[str]] = [
-        "FM",
-        "USB",
-        "LSB",
-        "AM",
-        "CW",
-        "CWR",
-        "PKTFM",
-        "PKTUSB",
-        "PKTLSB",
-    ]
-    _ATT_STEPS: ClassVar[list[int]] = [0, 6, 12, 18]
     _PRE_STEPS: ClassVar[list[int]] = [0, 1]  # off / on — hamlib uses index (0=off, 1=preamp 1)
-    _DATA_ON: ClassVar[dict[str, str]] = {"FM": "PKTFM", "USB": "PKTUSB", "LSB": "PKTLSB"}
-    _DATA_OFF: ClassVar[dict[str, str]] = {"PKTFM": "FM", "PKTUSB": "USB", "PKTLSB": "LSB"}
 
     class ControlChanged(Message):
         """Posted when a level or function is changed via a panel button."""
@@ -405,19 +391,33 @@ class RigCommandPanel(Widget):
             self.key = key
             self.value = value
 
-    def __init__(self, rig, **kwargs) -> None:
+    def __init__(self, rig, rig_config=None, **kwargs) -> None:
         super().__init__(**kwargs)
         self._rig = rig
+        # Rig capability hints — derived from RigConfig, with safe defaults
+        from rigtop.config import RigConfig as _RigConfig
+
+        _cfg = rig_config if rig_config is not None else _RigConfig()
+        self._modes: list[str] = list(_cfg.modes)
+        self._att_steps: list[int] = list(_cfg.att_steps)
+        self._att_settable: bool = _cfg.att_settable
+        self._has_data: bool = _cfg.has_data_modes
+        # Derive data-mode maps from the configured modes list
+        _pkt = {"FM": "PKTFM", "USB": "PKTUSB", "LSB": "PKTLSB"}
+        self._data_on_map: dict[str, str] = {
+            k: v for k, v in _pkt.items() if v in self._modes
+        }
+        self._data_off_map: dict[str, str] = {v: k for k, v in self._data_on_map.items()}
         self._freq_hz: int | None = None
         self._att_idx: int = 0
         self._pre_idx: int = 0
         self._nb_on: bool = False
         self._nr_on: bool = False
-        self._data_on: bool = False
+        self._data_active: bool = False
         self._updating = False
 
     def compose(self) -> ComposeResult:
-        yield Select([(m, m) for m in self._MODES], id="mode-sel")
+        yield Select([(m, m) for m in self._modes], id="mode-sel")
         yield Button("◄◄", id="step-m10k", classes="step")
         yield Button("◄", id="step-m1k", classes="step")
         yield Label("—", id="freq-lbl")
@@ -427,7 +427,8 @@ class RigCommandPanel(Widget):
         yield Button("Pre: off", id="pre-btn", classes="cycle")
         yield Button("NB: off", id="nb-btn", classes="cycle")
         yield Button("NR: off", id="nr-btn", classes="cycle")
-        yield Button("Data: off", id="data-btn", classes="cycle")
+        if self._has_data:
+            yield Button("Data: off", id="data-btn", classes="cycle")
 
     def render_data(
         self,
@@ -452,15 +453,15 @@ class RigCommandPanel(Widget):
 
         self._updating = True
         try:
-            if mode and mode in self._MODES:
+            if mode and mode in self._modes:
                 self.query_one("#mode-sel", Select).value = mode
         except Exception:
             pass
         finally:
             self._updating = False
 
-        if mode:
-            self._data_on = mode in self._DATA_OFF
+        if mode and self._has_data:
+            self._data_active = mode in self._data_off_map
             try:
                 self.query_one("#data-btn", Button).label = self._data_label()
             except Exception:
@@ -469,8 +470,8 @@ class RigCommandPanel(Widget):
         att_raw = controls.get("ATT")
         if att_raw is not None:
             self._att_idx = min(
-                range(len(self._ATT_STEPS)),
-                key=lambda i: abs(self._ATT_STEPS[i] - att_raw),
+                range(len(self._att_steps)),
+                key=lambda i: abs(self._att_steps[i] - att_raw),
             )
             try:
                 self.query_one("#att-btn", Button).label = self._att_label()
@@ -504,7 +505,7 @@ class RigCommandPanel(Widget):
                 pass
 
     def _att_label(self) -> str:
-        v = self._ATT_STEPS[self._att_idx]
+        v = self._att_steps[self._att_idx]
         return f"ATT: {v} dB" if v else "ATT: off"
 
     def _pre_label(self) -> str:
@@ -517,7 +518,7 @@ class RigCommandPanel(Widget):
         return "NR: on" if self._nr_on else "NR: off"
 
     def _data_label(self) -> str:
-        return "Data: on" if self._data_on else "Data: off"
+        return "Data: on" if self._data_active else "Data: off"
 
     @on(Button.Pressed)
     def _handle_button(self, event: Button.Pressed) -> None:
@@ -531,22 +532,25 @@ class RigCommandPanel(Widget):
         if btn_id in step_map and self._freq_hz is not None:
             self._rig.set_freq(self._freq_hz + step_map[btn_id])
         elif btn_id == "att-btn":
-            self._att_idx = (self._att_idx + 1) % len(self._ATT_STEPS)
-            val = float(self._ATT_STEPS[self._att_idx])
+            if not self._att_settable:
+                self.notify("ATT: not settable via hamlib for this rig", severity="warning")
+                return
+            self._att_idx = (self._att_idx + 1) % len(self._att_steps)
+            val = float(self._att_steps[self._att_idx])
             if self._rig.set_level("ATT", val):
                 # Read back to confirm and get the actual ATT value
                 actual = self._rig.get_level("ATT")
                 if actual is not None:
                     self._att_idx = min(
-                        range(len(self._ATT_STEPS)),
-                        key=lambda i: abs(self._ATT_STEPS[i] - actual),
+                        range(len(self._att_steps)),
+                        key=lambda i: abs(self._att_steps[i] - actual),
                     )
                     val = actual
                 self.query_one("#att-btn", Button).label = self._att_label()
                 self.post_message(self.ControlChanged("ATT", val))
             else:
-                self._att_idx = (self._att_idx - 1) % len(self._ATT_STEPS)  # revert
-                self.notify("ATT: not settable via hamlib for this rig", severity="warning")
+                self._att_idx = (self._att_idx - 1) % len(self._att_steps)  # revert
+                self.notify("ATT: set failed", severity="error")
         elif btn_id == "pre-btn":
             self._pre_idx = (self._pre_idx + 1) % len(self._PRE_STEPS)
             val = float(self._PRE_STEPS[self._pre_idx])
@@ -576,12 +580,12 @@ class RigCommandPanel(Widget):
                 self._nr_on = not self._nr_on  # revert on failure
         elif btn_id == "data-btn":
             cur = self._rig.get_mode() or ""
-            if self._data_on:
-                target = self._DATA_OFF.get(cur)
+            if self._data_active:
+                target = self._data_off_map.get(cur)
             else:
-                target = self._DATA_ON.get(cur)
+                target = self._data_on_map.get(cur)
             if target and self._rig.set_mode(target):
-                self._data_on = not self._data_on
+                self._data_active = not self._data_active
                 self.query_one("#data-btn", Button).label = self._data_label()
 
     @on(Select.Changed, "#mode-sel")
@@ -1096,6 +1100,7 @@ class RigtopApp(App[None]):
         aprs_config=None,
         packet_config=None,
         rig_name: str = "",
+        rig_config=None,
         interval: float = 0.5,
         meters: bool = True,
         gps_fallback=None,
@@ -1116,6 +1121,7 @@ class RigtopApp(App[None]):
         self._aprs_config = aprs_config
         self._packet_config = packet_config
         self._rig_name = rig_name
+        self._rig_config = rig_config
         self._interval = interval
         self._meters_enabled = meters
         self._gps_fallback = gps_fallback
@@ -1145,7 +1151,7 @@ class RigtopApp(App[None]):
             yield StationPanel(id="station-panel")
         yield WaterfallPanel(id="waterfall")
         yield RigControlPanel(self._rig, id="ctrl-panel")
-        yield RigCommandPanel(self._rig, id="cmd-panel")
+        yield RigCommandPanel(self._rig, rig_config=self._rig_config, id="cmd-panel")
         yield ConnectionBar(id="conn-bar")
         with Horizontal(id="aprs-row"):
             yield AprsPanel(id="aprs-panel")

@@ -17,10 +17,22 @@ class LogLevel(StrEnum):
     ERROR = "ERROR"
 
 
+# Default rig capability values — extracted so they are visible without reading Field() lambdas.
+DEFAULT_ATT_STEPS: list[int] = [0, 6, 12, 18]
+DEFAULT_MODES: list[str] = [
+    "FM", "USB", "LSB", "AM", "CW", "CWR", "PKTFM", "PKTUSB", "PKTLSB",
+]
+
+
 class RigConfig(BaseModel):
     name: str = "default"
     host: str = "127.0.0.1"
     port: int = Field(default=4532, ge=1, le=65535)
+    # UI capability hints — set these to match your rig's hamlib behaviour
+    att_steps: list[int] = Field(default_factory=lambda: list(DEFAULT_ATT_STEPS))
+    att_settable: bool = True  # set False if hamlib returns RPRT -9 for ATT (e.g. IC-705)
+    modes: list[str] = Field(default_factory=lambda: list(DEFAULT_MODES))
+    has_data_modes: bool = True  # show Data button (maps FM↔PKTFM etc.)
 
 
 class Parity(StrEnum):
