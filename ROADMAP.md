@@ -6,7 +6,7 @@ useful ham-radio dashboard.
 
 ---
 
-## Current state (v0.x)
+## Current state (v0.6)
 
 rigtop started as a thin Hamlib `rigctld` wrapper with a rich TUI for frequency
 and meter display.  Over time it has grown into a multi-purpose ham-radio station
@@ -15,11 +15,13 @@ integration layer:
 | Area | What exists today |
 |------|-------------------|
 | **Rig control** | Frequency, mode, passband, PTT, and meters (S-meter, ALC, SWR, power, …) via rigctld; auto-launches rigctld subprocess |
+| **Multi-rig** | Per-rig capability hints in config (`att_steps`, `att_settable`, `modes`, `has_data_modes`); TUI adapts without code changes; example profiles for IC-705, IC-7300, IC-9700, FT-991A |
 | **GPS** | Position from rig (rigctld), iOS GPS2IP fallback, static config fallback |
-| **TUI** | Full-screen rich dashboard: rig/meters panel, GPS, connections, APRS traffic feed, log pane, vim-style `:command` bar |
-| **APRS** | APRS-IS beacon + receive; Direwolf KISS TCP for RF decodes; smart iGate colour-coding in TUI |
+| **TUI** | Full-screen rich dashboard: rig/meters panel, GPS, connections, APRS traffic feed, log pane, vim-style `:command` bar; styled startup/shutdown output |
+| **APRS** | APRS-IS beacon + receive; Direwolf KISS TCP for RF decodes; smart iGate colour-coding in TUI; listen-only by default (`:beacon on` enables RF TBEACON) |
+| **Direwolf** | On-demand launch via `:aprs on` / `:packet on`; rigtop writes derived active config — user's source file never modified; `:beacon on/off` restarts Direwolf with TBEACON toggled |
 | **GPS forwarding** | NMEA GGA/RMC over serial or TCP; gpsd-compatible JSON server |
-| **Digital modes** | WSJT-X Maidenhead grid via UDP; BBS/packet QSY via `:bbs` command |
+| **Digital modes** | WSJT-X Maidenhead grid via UDP; BBS/packet QSY via `:packet on` command |
 | **Safety** | TX watchdog — forces PTT off after configurable timeout |
 | **Extensibility** | Sink plugin system (`@register_sink`); source registry |
 
@@ -95,10 +97,10 @@ Goals: make rigtop easy to install and reliable enough for daily use.
 
 - [ ] Publish to PyPI (`uv build` → `pip install rigtop`)
 - [ ] Windows PyInstaller bundle with embedded `rigctld`
-- [ ] Automated CI: ruff lint + pytest on Linux and Windows
-- [ ] Unit tests for `geo.py` (Maidenhead, NMEA sentences)
-- [ ] Unit tests for config validation (pydantic models)
-- [ ] Improve error messages and recovery on rigctld/GPS disconnect
+- [x] Automated CI: ruff lint + pytest on Linux and Windows
+- [x] Unit tests for `geo.py` (Maidenhead, NMEA sentences)
+- [x] Unit tests for config validation (pydantic models)
+- [x] Improve error messages and recovery on rigctld/GPS disconnect — styled rich startup output with ✓/⚠/✗ indicators
 - [ ] Document `civ_proxy` sink and `discovery.py` in README
 
 ### Phase 2 — Rig control & usability  *(mid-term)*
@@ -143,7 +145,8 @@ Goals: make rigtop work beyond the terminal and integrate with the wider ham eco
 - [ ] `systemd` unit file and Windows service wrapper
 - [ ] REST/WebSocket API for external integrations
 - [ ] Rotor control via `rotctld` (azimuth/elevation panel in TUI)
-- [ ] Multi-rig support (connect to several rigctld instances)
+- [x] Per-rig capability hints — TUI adapts to different radios without code changes *(Phase 2 multi-rig groundwork)*
+- [ ] Multi-rig support (connect to several rigctld instances simultaneously)
 - [ ] Desktop notification sink (OS-level alerts for messages)
 
 ---
