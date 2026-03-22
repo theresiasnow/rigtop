@@ -16,6 +16,7 @@ from pathlib import Path
 
 from loguru import logger
 from rich.console import Console
+from rich.markup import escape as _esc
 from rich.rule import Rule
 
 from rigtop.app import run
@@ -227,7 +228,7 @@ def _start_rigctld(cfg: Config) -> tuple[RigctldLauncher | None, DirewolfBuffer 
     try:
         launcher.start()
     except (FileNotFoundError, RuntimeError) as e:
-        _console.print(f"  [bold red]✗  Error:[/bold red] {e}")
+        _console.print(f"  [bold red]✗  Error:[/bold red] {_esc(str(e))}")
         sys.exit(1)
     return launcher, buf
 
@@ -263,7 +264,7 @@ def _connect_rig(cfg: Config, launcher: RigctldLauncher | None) -> RigctldSource
     """Connect to rigctld; exit on failure."""
     _console.print(
         f"  [cyan][5/8][/cyan] Connecting to rig"
-        f" ([bold]{cfg.rig.name}[/bold] @ {cfg.rig.host}:{cfg.rig.port})…"
+        f" ([bold]{_esc(cfg.rig.name)}[/bold] @ {cfg.rig.host}:{cfg.rig.port})…"
     )
     rig = RigctldSource(host=cfg.rig.host, port=cfg.rig.port)
     try:
@@ -273,7 +274,7 @@ def _connect_rig(cfg: Config, launcher: RigctldLauncher | None) -> RigctldSource
             launcher.stop()
         _console.print(
             f"  [bold red]✗  Error:[/bold red] Could not connect to rigctld"
-            f" at {cfg.rig.host}:{cfg.rig.port}\n         {e}"
+            f" at {cfg.rig.host}:{cfg.rig.port}\n         {_esc(str(e))}"
         )
         sys.exit(1)
     return rig
@@ -331,7 +332,8 @@ def _apply_qsy(cfg: Config, rig: RigctldSource) -> None:
                 logger.error("Failed to set mode {}", cfg.aprs.qsy_mode)
     except (ConnectionError, OSError) as e:
         _console.print(
-            f"  [yellow]⚠  Radio not responding[/yellow] — is it powered on and connected? ({e})"
+            f"  [yellow]⚠  Radio not responding[/yellow]"
+            f" — is it powered on and connected? ({_esc(str(e))})"
         )
         logger.warning("QSY failed — radio disconnected: {}", e)
 
@@ -349,7 +351,9 @@ def _setup_gps_fallback(cfg: Config) -> Gps2ipSource | None:
     try:
         gps.connect()
     except (ConnectionRefusedError, TimeoutError, OSError) as e:
-        _console.print(f"         [yellow]⚠  GPS fallback unavailable[/yellow] ({e}) — skipping")
+        _console.print(
+            f"         [yellow]⚠  GPS fallback unavailable[/yellow] ({_esc(str(e))}) — skipping"
+        )
         return None
     else:
         _console.print("         [green]✓[/green] GPS fallback connected")
