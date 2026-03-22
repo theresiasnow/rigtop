@@ -1400,20 +1400,13 @@ class RigtopApp(App[None]):
             self._wd_tripped,
         )
         aprsis_sinks = [s for s in self._sinks if type(s).__name__ == "AprsIsSink"]
-        if aprsis_sinks:
-            # Prefer a connected sink, then an enabled one, else the first configured
-            s = (
-                next((x for x in aprsis_sinks if getattr(x, "connected", False)), None)
-                or next((x for x in aprsis_sinks if getattr(x, "_beacon_enabled", False)), None)
-                or aprsis_sinks[0]
-            )
-            beacon_enabled = bool(getattr(s, "_beacon_enabled", False)) and bool(
-                getattr(s, "connected", False)
-            )
+        dw_active = self._dw_launcher is not None and self._dw_launcher.running
+        if aprsis_sinks or dw_active:
+            # Beacon enabled = user intent (not _beacon_disabled).
+            # Connection state is shown separately in the Connections pane.
+            beacon_enabled = not self._beacon_disabled
         else:
-            # No APRS-IS sink — show beacon indicator based on Direwolf state
-            dw_active = self._dw_launcher is not None and self._dw_launcher.running
-            beacon_enabled = (not self._beacon_disabled) if dw_active else None
+            beacon_enabled = None
         self.query_one(StationPanel).render_data(
             pos,
             grid,
