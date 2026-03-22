@@ -8,10 +8,47 @@ meters = true          # show rig meter values (ALC, SWR, power, etc.)
 log_level = "WARNING" # DEBUG, INFO, WARNING, ERROR (also controls rigctld -v)
 
 # --- Rig (rigctld) — always used for GPS, frequency, mode, meters ---
+# Use [rig] for a single radio, or [[rig]] entries for multiple (select with :rig <name>).
+#
+# Capability hints let the TUI adapt to your radio without source code changes:
+#   att_steps     — ATT dB steps your radio supports (default [0,6,12,18])
+#   att_settable  — false if hamlib can't set ATT on your radio (IC-705: false)
+#   modes         — modes shown in the dropdown (omit unsupported ones)
+#   has_data_modes — false to hide the Data button (for radios without PKT modes)
+
+# IC-705 — ATT read-only via hamlib
 [rig]
-name = "IC-705"       # radio name (shown in TUI Station pane)
-host = "127.0.0.1"    # rigctld TCP host
-port = 4532            # rigctld TCP port
+name = "IC-705"
+host = "127.0.0.1"
+port = 4532
+att_settable  = false
+att_steps     = [0, 6, 12, 18]
+
+# --- Additional rig examples (uncomment and rename [rig] → [[rig]] to use multiple) ---
+
+# IC-7300 — ATT settable, same steps
+# [[rig]]
+# name         = "IC-7300"
+# host         = "127.0.0.1"
+# port         = 4533
+# att_settable = true
+# att_steps    = [0, 6, 12, 18]
+
+# IC-9700 (VHF/UHF — similar caps to IC-705)
+# [[rig]]
+# name         = "IC-9700"
+# port         = 4534
+# att_settable = false
+# att_steps    = [0, 3, 6, 9, 12, 15, 18]
+
+# FT-991A — no Icom packet modes, different ATT steps
+# [[rig]]
+# name           = "FT-991A"
+# port           = 4535
+# att_settable   = true
+# att_steps      = [0, 6, 12]
+# has_data_modes = false
+# modes          = ["FM", "USB", "LSB", "AM", "CW", "CWR", "RTTY", "RTTYR", "PKTFM", "PKTUSB"]
 
 # --- rigctld launcher (auto-start rigctld) ---
 # Remove this section or use --no-rigctld to skip auto-launch.
