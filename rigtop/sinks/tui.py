@@ -1403,7 +1403,9 @@ class RigtopApp(App[None]):
                 getattr(s, "connected", False)
             )
         else:
-            beacon_enabled = None
+            # No APRS-IS sink — show beacon indicator based on Direwolf state
+            dw_active = self._dw_launcher is not None and self._dw_launcher.running
+            beacon_enabled = (not self._beacon_disabled) if dw_active else None
         self.query_one(StationPanel).render_data(
             pos,
             grid,
@@ -1775,27 +1777,43 @@ class RigtopApp(App[None]):
         self._start_direwolf(profile)
 
     def _cmd_beacon(self, args: list[str]) -> None:
-        sinks = [
+        aprsis_sinks = [
             s
             for s in self._sinks
             if type(s).__name__ == "AprsIsSink" and getattr(s, "enabled", True)
         ]
-        if not sinks:
-            self.notify("No APRS-IS sink configured", severity="warning")
-            return
-        sink = sinks[0]
+        dw_active = self._dw_launcher is not None and self._dw_launcher.running
+
         if not args:
-            active = sink._beacon_enabled and sink.connected
-            state = "ON" if active else ("READY" if sink._beacon_enabled else "OFF")
-            self.notify(f"Beacon: {state}  (interval {sink._interval}s)")
+            if aprsis_sinks:
+                sink = aprsis_sinks[0]
+                active = sink._beacon_enabled and sink.connected
+                state = "ON" if active else ("READY" if sink._beacon_enabled else "OFF")
+                self.notify(f"Beacon: {state}  (interval {sink._interval}s)")
+            elif dw_active:
+                state = "OFF" if self._beacon_disabled else "ON"
+                self.notify(f"Beacon: {state}  (RF via Direwolf TBEACON)")
+            else:
+                self.notify("Beacon: no APRS-IS sink or Direwolf active", severity="warning")
             return
+
         action = args[0].lower()
         if action == "on":
-            sink._beacon_enabled = True
-            self.notify("Beacon ON — position will be sent to APRS-IS", title="Beacon")
+            self._beacon_disabled = False
+            for s in aprsis_sinks:
+                s._beacon_enabled = True
+            parts = []
+            if aprsis_sinks:
+                parts.append("APRS-IS")
+            if dw_active:
+                parts.append("RF (Direwolf TBEACON)")
+            label = " + ".join(parts) if parts else "beaconing"
+            self.notify(f"Beacon ON — {label}", title="Beacon")
         elif action == "off":
-            sink._beacon_enabled = False
-            self.notify("Beacon OFF — position not sent to APRS-IS", title="Beacon")
+            self._beacon_disabled = True
+            for s in aprsis_sinks:
+                s._beacon_enabled = False
+            self.notify("Beacon OFF — position not transmitted", title="Beacon")
         else:
             self.notify("Usage: beacon [on|off]", severity="warning")
 
