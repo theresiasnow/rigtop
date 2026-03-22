@@ -1802,6 +1802,8 @@ class RigtopApp(App[None]):
             self._beacon_disabled = False
             for s in aprsis_sinks:
                 s._beacon_enabled = True
+            if dw_active:
+                self._restart_direwolf_for_beacon(enabled=True)
             parts = []
             if aprsis_sinks:
                 parts.append("APRS-IS")
@@ -1813,6 +1815,8 @@ class RigtopApp(App[None]):
             self._beacon_disabled = True
             for s in aprsis_sinks:
                 s._beacon_enabled = False
+            if dw_active:
+                self._restart_direwolf_for_beacon(enabled=False)
             self.notify("Beacon OFF — position not transmitted", title="Beacon")
         else:
             self.notify("Usage: beacon [on|off]", severity="warning")
@@ -2035,15 +2039,19 @@ class RigtopApp(App[None]):
         lnchr = self._dw_launcher
         if lnchr is None:
             return
-        conf = lnchr.install_path / f"direwolf-{profile}.conf"
-        if not conf.is_file():
-            self.notify(f"Config not found: {conf}", severity="error")
+        # Source config: explicit path from toml, or fall back to install_path convention.
+        src = lnchr.source_configs.get(profile) or (
+            lnchr.install_path / f"direwolf-{profile}.conf"
+        )
+        if not src.is_file():
+            self.notify(f"Config not found: {src}", severity="error")
             return
         self.notify(f"Direwolf starting ({profile})…")
+        beacon_enabled = not self._beacon_disabled
 
         def _do() -> None:
             try:
-                lnchr.switch_config(f"direwolf-{profile}.conf")
+                lnchr.switch_config(profile, beacon_enabled=beacon_enabled)
                 if not lnchr.running:
                     lnchr.start()
             except (FileNotFoundError, RuntimeError) as e:
@@ -2053,6 +2061,26 @@ class RigtopApp(App[None]):
                     "Direwolf error",
                     6,
                 )
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _restart_direwolf_for_beacon(self, enabled: bool) -> None:
+        """Regenerate active config with TBEACON toggled and restart Direwolf."""
+        lnchr = self._dw_launcher
+        if lnchr is None or not lnchr.running:
+            return
+        profile = lnchr._active_profile
+        if profile is None:
+            return
+        self.notify("Direwolf restarting to apply beacon change…")
+
+        def _do() -> None:
+            try:
+                lnchr.generate_active_config(profile, beacon_enabled=enabled)
+                lnchr.stop()
+                lnchr.start()
+            except Exception as e:
+                self.call_from_thread(self.notify, str(e), "Direwolf error", 6)
 
         threading.Thread(target=_do, daemon=True).start()
 

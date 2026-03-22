@@ -106,6 +106,8 @@ class DirewolfConfig(BaseModel):
     port: int = Field(default=8001, ge=1, le=65535)
     install_path: str | None = None  # set to enable launcher
     extra_args: list[str] = Field(default_factory=list)
+    aprs_config: str | None = None  # path to source APRS Direwolf config file
+    packet_config: str | None = None  # path to source packet/BBS Direwolf config file
 
 
 class BbsConfig(BaseModel):

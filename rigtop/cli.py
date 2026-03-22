@@ -110,7 +110,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-beacon",
         action="store_true",
         default=False,
-        help="Disable APRS-IS position beaconing (still receives traffic)",
+        help="(default) Beacon is disabled at startup; use :beacon on to enable transmission.",
     )
     parser.add_argument(
         "--scan",
@@ -154,7 +154,9 @@ def _apply_cli_overrides(cfg: Config, args: argparse.Namespace) -> tuple[Config,
         cfg.gps_fallback = None
     if args.console:
         cfg.sinks = [SinkConfig(type="console")]
-    return cfg, args.no_beacon
+    # Beacon is always disabled at startup; user enables explicitly with :beacon on.
+    # --no-beacon is now redundant but kept for backwards compatibility.
+    return cfg, True
 
 
 def _create_sinks(cfg: Config) -> tuple[list[PositionSink], set[int]]:
@@ -226,17 +228,27 @@ def _start_rigctld(cfg: Config) -> tuple[RigctldLauncher | None, DirewolfBuffer 
     return launcher, buf
 
 
-def _make_dw_launcher(cfg: Config) -> tuple[DirewolfLauncher | None, DirewolfBuffer | None]:
+def _make_dw_launcher(
+    cfg: Config, config_dir: Path
+) -> tuple[DirewolfLauncher | None, DirewolfBuffer | None]:
     """Create a Direwolf launcher (started on-demand by :aprs / :packet)."""
     if cfg.direwolf is None or not cfg.direwolf.install_path:
         print("[4/8] Direwolf launcher — disabled")
         return None, None
 
     dwcfg = cfg.direwolf
+    source_configs: dict[str, Path] = {}
+    if dwcfg.aprs_config:
+        source_configs["aprs"] = Path(dwcfg.aprs_config)
+    if dwcfg.packet_config:
+        source_configs["packet"] = Path(dwcfg.packet_config)
+
     print("[4/8] Direwolf launcher ready (on-demand)")
     buf = DirewolfBuffer()
     launcher = DirewolfLauncher(
         install_path=dwcfg.install_path,
+        config_dir=config_dir,
+        source_configs=source_configs,
         stderr_callback=buf.push,
         extra_args=dwcfg.extra_args,
     )
@@ -419,7 +431,8 @@ def main() -> None:
         print("[3/8] rigctld — skipped (--no-rigctld)")
 
     # [4/8] Direwolf launcher
-    dw_launcher, dw_buffer = _make_dw_launcher(cfg)
+    config_dir = args.config.parent if args.config else Path.cwd()
+    dw_launcher, dw_buffer = _make_dw_launcher(cfg, config_dir)
 
     # [5/8] Connect to rig
     rig = _connect_rig(cfg, launcher)

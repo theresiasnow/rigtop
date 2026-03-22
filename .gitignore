@@ -16,6 +16,9 @@ wheels/
 # User config (use rigtop.example.toml as template)
 rigtop.toml
 
+# Generated Direwolf active configs (derived at runtime from source configs)
+direwolf-*-active.conf
+
 # Test / coverage artifacts
 .pytest_cache/
 .coverage

@@ -20,16 +20,23 @@ class DirewolfLauncher:
         self,
         *,
         install_path: str = "c:\\direwolf",
+        config_dir: str | Path | None = None,
+        source_configs: dict[str, Path] | None = None,
         stderr_callback: Callable[[str], None] | None = None,
         extra_args: list[str] | None = None,
     ) -> None:
         self.install_path = Path(install_path)
-        self.config_file: str | None = None
+        # Directory where rigtop writes derived active configs (defaults to install_path).
+        self._config_dir = Path(config_dir) if config_dir else self.install_path
+        # profile → user-provided source config path (e.g. "aprs" → Path("c:/dw/dw-aprs.conf"))
+        self.source_configs: dict[str, Path] = source_configs or {}
         self.stderr_callback = stderr_callback
         self.extra_args = extra_args or []
         self._proc: subprocess.Popen[bytes] | None = None
         self._pty_proc = None  # winpty PtyProcess, Windows only
         self._stderr_thread: threading.Thread | None = None
+        self._active_config: Path | None = None  # derived config written by generate_active_config
+        self._active_profile: str | None = None  # e.g. "aprs" or "bbs"
 
     # ------------------------------------------------------------------
 
@@ -49,11 +56,12 @@ class DirewolfLauncher:
 
     def _build_command(self) -> list[str]:
         exe = self._find_exe()
-        if not self.config_file:
+        if self._active_config is not None:
+            conf = self._active_config
+        else:
             raise RuntimeError(
-                "No config_file set — call switch_config() or use :aprs on / :bbs on first."
+                "No config set — call switch_config() or use :aprs on / :bbs on first."
             )
-        conf = self.install_path / self.config_file
         if not conf.is_file():
             raise FileNotFoundError(f"Config file not found: {conf}.")
         cmd = [exe, "-t", "0", "-c", str(conf)]
@@ -61,6 +69,43 @@ class DirewolfLauncher:
         return cmd
 
     # ------------------------------------------------------------------
+
+    def generate_active_config(self, profile: str, beacon_enabled: bool = True) -> Path:
+        """Derive an active config from the source, writing it to *config_dir*.
+
+        When *beacon_enabled* is False, TBEACON lines are commented out so
+        Direwolf does not send RF position beacons.  The user's source file is
+        never modified.  Returns the path of the written active config.
+        """
+        src = self.source_configs.get(profile)
+        if src is None:
+            src = self.install_path / f"direwolf-{profile}.conf"
+        if not src.is_file():
+            raise FileNotFoundError(
+                f"Direwolf source config not found: {src}. "
+                f"Set [direwolf] {profile}_config in rigtop.toml "
+                f"or place the file in {self.install_path}."
+            )
+        text = src.read_text(encoding="utf-8")
+        lines = []
+        for line in text.splitlines():
+            stripped = line.lstrip()
+            if stripped.upper().startswith("TBEACON") and not stripped.startswith("#"):
+                if not beacon_enabled:
+                    line = "# [rigtop beacon off] " + line
+            elif stripped.startswith("# [rigtop beacon off] ") and beacon_enabled:
+                line = line.split("# [rigtop beacon off] ", 1)[1]
+            lines.append(line)
+        out = self._config_dir / f"direwolf-{profile}-active.conf"
+        out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self._active_config = out
+        self._active_profile = profile
+        logger.info(
+            "Wrote active Direwolf config: {} (TBEACON {})",
+            out,
+            "enabled" if beacon_enabled else "disabled",
+        )
+        return out
 
     def start(self, settle: float = 2.0) -> None:
         """Start Direwolf and wait *settle* seconds for it to initialise."""
@@ -212,17 +257,14 @@ class DirewolfLauncher:
 
     @property
     def active_config(self) -> str | None:
-        """Return the config file name currently in use."""
-        return self.config_file
+        """Return the active profile name (e.g. 'aprs', 'bbs')."""
+        return self._active_profile
 
-    def switch_config(self, config_file: str) -> None:
-        """Stop Direwolf, switch config, and restart."""
-        conf = self.install_path / config_file
-        if not conf.is_file():
-            raise FileNotFoundError(f"Config file not found: {conf}")
+    def switch_config(self, profile: str, beacon_enabled: bool = True) -> None:
+        """Generate an active config for *profile* and restart Direwolf if running."""
         was_running = self.running
         if was_running:
             self.stop()
-        self.config_file = config_file
+        self.generate_active_config(profile, beacon_enabled=beacon_enabled)
         if was_running:
             self.start()
