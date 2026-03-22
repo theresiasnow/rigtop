@@ -20,7 +20,15 @@ class LogLevel(StrEnum):
 # Default rig capability values — extracted so they are visible without reading Field() lambdas.
 DEFAULT_ATT_STEPS: list[int] = [0, 6, 12, 18]
 DEFAULT_MODES: list[str] = [
-    "FM", "USB", "LSB", "AM", "CW", "CWR", "PKTFM", "PKTUSB", "PKTLSB",
+    "FM",
+    "USB",
+    "LSB",
+    "AM",
+    "CW",
+    "CWR",
+    "PKTFM",
+    "PKTUSB",
+    "PKTLSB",
 ]
 
 

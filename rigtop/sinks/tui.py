@@ -404,9 +404,7 @@ class RigCommandPanel(Widget):
         self._has_data: bool = _cfg.has_data_modes
         # Derive data-mode maps from the configured modes list
         _pkt = {"FM": "PKTFM", "USB": "PKTUSB", "LSB": "PKTLSB"}
-        self._data_on_map: dict[str, str] = {
-            k: v for k, v in _pkt.items() if v in self._modes
-        }
+        self._data_on_map: dict[str, str] = {k: v for k, v in _pkt.items() if v in self._modes}
         self._data_off_map: dict[str, str] = {v: k for k, v in self._data_on_map.items()}
         self._freq_hz: int | None = None
         self._att_idx: int = 0
@@ -2046,9 +2044,7 @@ class RigtopApp(App[None]):
         if lnchr is None:
             return
         # Source config: explicit path from toml, or fall back to install_path convention.
-        src = lnchr.source_configs.get(profile) or (
-            lnchr.install_path / f"direwolf-{profile}.conf"
-        )
+        src = lnchr.source_configs.get(profile) or (lnchr.install_path / f"direwolf-{profile}.conf")
         if not src.is_file():
             self.notify(f"Config not found: {src}", severity="error")
             return
