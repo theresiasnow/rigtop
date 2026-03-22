@@ -331,8 +331,7 @@ def _apply_qsy(cfg: Config, rig: RigctldSource) -> None:
                 logger.error("Failed to set mode {}", cfg.aprs.qsy_mode)
     except (ConnectionError, OSError) as e:
         _console.print(
-            f"  [yellow]⚠  Radio not responding[/yellow]"
-            f" — is it powered on and connected? ({e})"
+            f"  [yellow]⚠  Radio not responding[/yellow] — is it powered on and connected? ({e})"
         )
         logger.warning("QSY failed — radio disconnected: {}", e)
 
