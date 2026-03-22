@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from rigtop.config import RigConfig
 from rigtop.sinks.tui import RigCommandPanel
 
@@ -47,8 +45,17 @@ class TestAttNotSettable:
 
     def test_att_not_settable_skips_set_level(self):
         cfg = RigConfig(att_settable=False)
-        p = _panel(cfg)
-        assert p._att_settable is False
+        mock_rig = MagicMock()
+        p = RigCommandPanel(mock_rig, rig_config=cfg)
+        p.notify = MagicMock()  # prevent Textual app requirement
+
+        event = MagicMock()
+        event.button.id = "att-btn"
+        p._handle_button(event)
+
+        mock_rig.set_level.assert_not_called()
+        p.notify.assert_called_once()
+        assert "ATT" in p.notify.call_args[0][0]
 
     def test_att_settable_true_by_default(self):
         cfg = RigConfig()
@@ -110,15 +117,15 @@ class TestRigConfigParsing:
     """RigConfig fields parse from dict (as TOML would produce)."""
 
     def test_att_steps_from_dict(self):
-        cfg = RigConfig(**{"att_steps": [0, 12, 18, 20], "att_settable": True})
+        cfg = RigConfig(att_steps=[0, 12, 18, 20], att_settable=True)
         assert cfg.att_steps == [0, 12, 18, 20]
 
     def test_att_not_settable_from_dict(self):
-        cfg = RigConfig(**{"att_settable": False})
+        cfg = RigConfig(att_settable=False)
         assert cfg.att_settable is False
 
     def test_has_data_false_from_dict(self):
-        cfg = RigConfig(**{"has_data_modes": False})
+        cfg = RigConfig(has_data_modes=False)
         assert cfg.has_data_modes is False
 
     def test_defaults_unchanged_when_not_specified(self):
@@ -126,3 +133,31 @@ class TestRigConfigParsing:
         assert cfg.att_steps == [0, 6, 12, 18]
         assert cfg.att_settable is True
         assert cfg.has_data_modes is True
+
+
+class TestRigConfigValidation:
+    """Validators reject bad capability values early."""
+
+    def test_empty_att_steps_raises(self):
+        import pytest
+
+        with pytest.raises(Exception, match="att_steps"):
+            RigConfig(att_steps=[])
+
+    def test_negative_att_step_raises(self):
+        import pytest
+
+        with pytest.raises(Exception, match="non-negative"):
+            RigConfig(att_steps=[0, -6])
+
+    def test_empty_modes_raises(self):
+        import pytest
+
+        with pytest.raises(Exception, match="modes"):
+            RigConfig(modes=[])
+
+    def test_duplicate_modes_raises(self):
+        import pytest
+
+        with pytest.raises(Exception, match="duplicates"):
+            RigConfig(modes=["FM", "USB", "FM"])

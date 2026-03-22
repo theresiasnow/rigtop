@@ -22,6 +22,7 @@ from textual.widget import Widget
 from textual.widgets import Button, Header, Input, Label, RichLog, Select, Static
 from textual.worker import get_current_worker
 
+from rigtop.config import RigConfig
 from rigtop.geo import format_position, maidenhead
 from rigtop.sinks import PositionSink, register_sink
 from rigtop.sources import Position
@@ -391,21 +392,24 @@ class RigCommandPanel(Widget):
             self.key = key
             self.value = value
 
-    def __init__(self, rig, rig_config=None, **kwargs) -> None:
+    def __init__(self, rig, rig_config: RigConfig | None = None, **kwargs) -> None:
         super().__init__(**kwargs)
         self._rig = rig
         # Rig capability hints — derived from RigConfig, with safe defaults
-        from rigtop.config import RigConfig as _RigConfig
-
-        _cfg = rig_config if rig_config is not None else _RigConfig()
+        _cfg = rig_config if rig_config is not None else RigConfig()
         self._modes: list[str] = list(_cfg.modes)
         self._att_steps: list[int] = list(_cfg.att_steps)
         self._att_settable: bool = _cfg.att_settable
         self._has_data: bool = _cfg.has_data_modes
-        # Derive data-mode maps from the configured modes list
-        _pkt = {"FM": "PKTFM", "USB": "PKTUSB", "LSB": "PKTLSB"}
-        self._data_on_map: dict[str, str] = {k: v for k, v in _pkt.items() if v in self._modes}
-        self._data_off_map: dict[str, str] = {v: k for k, v in self._data_on_map.items()}
+        # Derive data-mode maps only when data modes are enabled for this rig.
+        # Keeping them empty when disabled prevents accidental use elsewhere.
+        if self._has_data:
+            _pkt = {"FM": "PKTFM", "USB": "PKTUSB", "LSB": "PKTLSB"}
+            self._data_on_map: dict[str, str] = {k: v for k, v in _pkt.items() if v in self._modes}
+            self._data_off_map: dict[str, str] = {v: k for k, v in self._data_on_map.items()}
+        else:
+            self._data_on_map = {}
+            self._data_off_map = {}
         self._freq_hz: int | None = None
         self._att_idx: int = 0
         self._pre_idx: int = 0
@@ -1098,7 +1102,7 @@ class RigtopApp(App[None]):
         aprs_config=None,
         packet_config=None,
         rig_name: str = "",
-        rig_config=None,
+        rig_config: RigConfig | None = None,
         interval: float = 0.5,
         meters: bool = True,
         gps_fallback=None,
