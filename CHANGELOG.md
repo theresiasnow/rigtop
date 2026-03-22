@@ -1,3 +1,9 @@
+## v0.6.0 (2026-03-22)
+
+### Feat
+
+- **config**: per-rig capability hints for multi-radio support
+
 ## v0.5.0 (2026-03-22)
 
 ### Feat
