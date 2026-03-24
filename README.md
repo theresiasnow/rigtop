@@ -22,6 +22,22 @@ Auto-starts `rigctld`, auto-falls back to GPS2IP when the rig has no GPS fix.
 - **TUI commands** — vim-style `:command` interface for rig control, APRS toggling, log filtering
 - **TX watchdog** — forces PTT off if the radio transmits continuously beyond a timeout (protects against stuck TX)
 
+## Terminal
+
+The TUI requires a terminal with **24-bit colour (truecolor)** and **UTF-8** support.
+A minimum width of **120 columns** is recommended for the full layout.
+
+| Platform | Recommended | Notes |
+|----------|-------------|-------|
+| Windows | [Windows Terminal](https://aka.ms/terminal) | Ships with Windows 11; free from Microsoft Store. Required — old `cmd.exe` and the default PowerShell window do not support truecolor. |
+| macOS | [iTerm2](https://iterm2.com/) | Terminal.app works from macOS Mojave (10.14). |
+| Linux | Any modern terminal | Gnome Terminal, Konsole, Kitty, Alacritty, xterm-256color all work. |
+| SSH | Any of the above | Truecolor follows the *client* terminal — set `TERM=xterm-256color` or `COLORTERM=truecolor` if colours look wrong. |
+
+**Windows note:** If you installed rigtop via the `.exe` installer, launch it from **Windows Terminal**
+(`wt rigtop`) for the best experience. Right-click the Start menu shortcut → *Open file location*,
+then drag the shortcut onto a Windows Terminal tab.
+
 ## Prerequisites
 
 - Python 3.14+, [uv](https://docs.astral.sh/uv/)
