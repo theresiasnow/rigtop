@@ -28,11 +28,29 @@ class Gps2ipSource(GpsSource):
         self._sock.connect((self.host, self.port))
         self._buffer = ""
 
+    @property
+    def connected(self) -> bool:
+        return self._sock is not None
+
     def close(self) -> None:
         if self._sock:
             self._sock.close()
             self._sock = None
         self._buffer = ""
+
+    def reconnect(self, timeout: float = 3.0) -> bool:
+        """Close and re-attempt connection with a short timeout. Returns True on success."""
+        self.close()
+        try:
+            self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self._sock.settimeout(timeout)
+            self._sock.connect((self.host, self.port))
+            self._buffer = ""
+        except OSError:
+            self._sock = None
+            return False
+        else:
+            return True
 
     def _read_sentences(self) -> list[str]:
         """Read available NMEA sentences from the TCP stream."""
@@ -43,7 +61,7 @@ class Gps2ipSource(GpsSource):
             if not data:
                 raise ConnectionError("GPS2IP connection closed")
             self._buffer += data.decode("ascii", errors="ignore")
-        except TimeoutError, ConnectionResetError:
+        except (TimeoutError, ConnectionResetError):
             pass
 
         sentences = []
@@ -68,7 +86,7 @@ class Gps2ipSource(GpsSource):
                     if hasattr(msg, "altitude") and msg.altitude:
                         try:
                             alt = float(msg.altitude)
-                        except ValueError, TypeError:
+                        except (ValueError, TypeError):
                             pass
                     return Position(msg.latitude, msg.longitude, alt=alt)
         return None
