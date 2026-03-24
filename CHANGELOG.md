@@ -1,3 +1,9 @@
+## v0.7.2 (2026-03-24)
+
+### Fix
+
+- **build**: add freeze_support() and limit OpenBLAS threads for PyInstaller
+
 ## v0.7.1 (2026-03-24)
 
 ## v0.7.0 (2026-03-24)
