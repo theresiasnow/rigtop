@@ -95,6 +95,9 @@ jobs:
     if: needs.bump.outputs.tag != ''
     permissions:
       contents: write
+    env:
+      OPENBLAS_NUM_THREADS: 1
+      OMP_NUM_THREADS: 1
 
     steps:
       - uses: actions/checkout@v6
