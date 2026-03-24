@@ -19,6 +19,7 @@ def _default_serial_port() -> str:
         return "/dev/cu.usbserial-0001"
     return "/dev/ttyUSB0"
 
+
 # Map Python log-level names to rigctld -v flag count.
 
 

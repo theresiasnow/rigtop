@@ -274,7 +274,7 @@ class RigctldSource(GpsSource):
                 continue
             try:
                 name = psutil.Process(c.pid).name().removesuffix(".exe") if c.pid else "?"
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
+            except psutil.NoSuchProcess, psutil.AccessDenied:
                 name = "?"
             names.append(_CLIENT_ALIASES.get(name, name))
         return names

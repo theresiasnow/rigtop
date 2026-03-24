@@ -442,7 +442,7 @@ class RigCommandPanel(Widget):
             try:
                 self._freq_hz = int(float(freq))
                 mhz = f"{self._freq_hz / 1e6:.6f} MHz"
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 self._freq_hz = None
                 mhz = "—"
         else:
@@ -775,7 +775,7 @@ class RigPanel(Static):
         if freq:
             try:
                 mhz = f"{float(freq) / 1e6:.6f} MHz"
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 mhz = str(freq)
         else:
             mhz = "—"
@@ -1542,7 +1542,7 @@ class RigtopApp(App[None]):
             if self._rig is not None:
                 try:
                     self._saved_freq = int(self._rig.get_frequency() or 0) or None
-                except (ValueError, TypeError):
+                except ValueError, TypeError:
                     self._saved_freq = None
                 self._saved_mode = self._rig.get_mode()
             qsy: list[str] = []
@@ -1611,7 +1611,7 @@ class RigtopApp(App[None]):
                 if not self._packet_active:
                     try:
                         self._saved_freq = int(self._rig.get_frequency() or 0) or None
-                    except (ValueError, TypeError):
+                    except ValueError, TypeError:
                         self._saved_freq = None
                     self._saved_mode = self._rig.get_mode()
                 if self._rig.set_freq(int(cfg.freq * 1e6)):
@@ -1960,7 +1960,7 @@ class RigtopApp(App[None]):
         if raw_mode == "SSB":
             try:
                 freq_hz = int(float(self._rig.get_frequency() or 0))
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 freq_hz = 0
             raw_mode = "LSB" if freq_hz < 10_000_000 else "USB"
         mode = _ALIASES.get(raw_mode, raw_mode)
@@ -2000,7 +2000,7 @@ class RigtopApp(App[None]):
         if i.get("freq"):
             try:
                 parts.insert(1, f"{float(i['freq']) / 1e6:.6f} MHz")
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 pass
         self.notify("  ".join(parts) if parts else "No info")
 

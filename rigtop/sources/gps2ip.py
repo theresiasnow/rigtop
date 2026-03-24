@@ -61,7 +61,7 @@ class Gps2ipSource(GpsSource):
             if not data:
                 raise ConnectionError("GPS2IP connection closed")
             self._buffer += data.decode("ascii", errors="ignore")
-        except (TimeoutError, ConnectionResetError):
+        except TimeoutError, ConnectionResetError:
             pass
 
         sentences = []
@@ -86,7 +86,7 @@ class Gps2ipSource(GpsSource):
                     if hasattr(msg, "altitude") and msg.altitude:
                         try:
                             alt = float(msg.altitude)
-                        except (ValueError, TypeError):
+                        except ValueError, TypeError:
                             pass
                     return Position(msg.latitude, msg.longitude, alt=alt)
         return None
