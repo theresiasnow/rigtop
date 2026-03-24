@@ -2,13 +2,29 @@
 
 from __future__ import annotations
 
+import os
 import socket
 
+import psutil
 from loguru import logger
 
 from rigtop.sources import GpsSource, Position, register_source
 
 #: Meter levels available during TX
+#: Friendly display names for well-known CAT client executables.
+_CLIENT_ALIASES: dict[str, str] = {
+    "L4ONG": "Log4OM",
+    "Log4OM2": "Log4OM",
+    "HRD": "HRD",
+    "Ham Radio Deluxe": "HRD",
+    "wsjtx": "WSJT-X",
+    "jtdx": "JTDX",
+    "js8call": "JS8Call",
+    "flrig": "flrig",
+    "omnirig": "OmniRig",
+    "OmniRig": "OmniRig",
+}
+
 TX_METERS = ["ALC", "SWR", "RFPOWER_METER", "COMP_METER", "ID_METER", "VD_METER"]
 #: Meter levels available during RX
 RX_METERS = ["STRENGTH"]
@@ -243,16 +259,38 @@ class RigctldSource(GpsSource):
         resp = self._send_command(f"+U {func} {1 if on else 0}")
         return "RPRT 0" in resp
 
+    def _connected_clients(self) -> list[str] | None:
+        """Return process names of external clients connected to the rigctld port."""
+        try:
+            conns = psutil.net_connections(kind="tcp")
+        except psutil.AccessDenied:
+            return None
+        our_pid = os.getpid()
+        names: list[str] = []
+        for c in conns:
+            if not (c.raddr and c.raddr.port == self.port and c.status == psutil.CONN_ESTABLISHED):
+                continue
+            if c.pid == our_pid:
+                continue
+            try:
+                name = psutil.Process(c.pid).name().removesuffix(".exe") if c.pid else "?"
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                name = "?"
+            names.append(_CLIENT_ALIASES.get(name, name))
+        return names
+
     def connections(self) -> list[dict]:
         status = "open" if self._sock else "closed"
-        return [
-            {
-                "label": "rigctld",
-                "kind": "tcp",
-                "status": status,
-                "address": f"{self.host}:{self.port}",
-            }
-        ]
+        clients = self._connected_clients() if self._sock else None
+        conn: dict = {
+            "label": "rigctld",
+            "kind": "tcp",
+            "status": status,
+            "address": f"{self.host}:{self.port}",
+        }
+        if clients is not None:
+            conn["clients"] = clients
+        return [conn]
 
     def __str__(self) -> str:
         return f"rigctld@{self.host}:{self.port}"
