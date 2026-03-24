@@ -1,3 +1,16 @@
+## v0.7.0 (2026-03-24)
+
+### Feat
+
+- **build**: PyInstaller + Inno Setup Windows installer
+- **gps**: auto-reconnect GPS2IP fallback every 30s
+- **rigctld**: show connected CAT client names in connection bar
+- **config**: per-rig rigctld config and --rig startup selection
+
+### Fix
+
+- **except**: correct bare except clauses to tuple form
+
 ## v0.6.1 (2026-03-22)
 
 ## v0.6.0 (2026-03-22)
