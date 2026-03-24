@@ -15,7 +15,26 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    # reverse_geocoder only needs scipy.spatial (cKDTree).
+    # Excluding the rest cuts ~150 MB of DLLs and prevents runner OOM.
+    excludes=[
+        "scipy.fft",
+        "scipy.linalg",
+        "scipy.integrate",
+        "scipy.interpolate",
+        "scipy.io",
+        "scipy.optimize",
+        "scipy.signal",
+        "scipy.stats",
+        "scipy.ndimage",
+        "scipy.odr",
+        "scipy.sparse.linalg",
+        "matplotlib",
+        "pandas",
+        "IPython",
+        "PIL",
+        "tkinter",
+    ],
     noarchive=False,
 )
 
