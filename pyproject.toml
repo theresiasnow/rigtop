@@ -13,11 +13,13 @@ dependencies = [
     "rich>=13.0",
     "textual>=0.80.0",
     "reverse_geocoder>=1.5.1",
+    "psutil>=6.0",
 ]
 
 [dependency-groups]
 dev = [
     "commitizen>=4.0",
+    "pyinstaller>=6.0",
     "pylint>=3.0",
     "pytest>=8.0",
     "ruff>=0.15.6",
