@@ -16,6 +16,8 @@ jobs:
   bump:
     name: cz bump → build → release
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.bump.outputs.tag }}
     # Skip the bump commit itself to avoid an infinite loop.
     # commitizen always prefixes bump commits with "bump:".
     if: "!startsWith(github.event.head_commit.message, 'bump:')"
@@ -82,3 +84,42 @@ jobs:
           files: dist/*
           generate_release_notes: true
           make_latest: true
+
+  build-installer:
+    name: Windows installer
+    runs-on: windows-latest
+    needs: bump
+    if: needs.bump.outputs.tag != ''
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.bump.outputs.tag }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.14
+        run: uv python install 3.14
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Build PyInstaller bundle
+        run: uv run pyinstaller rigtop.spec
+
+      - name: Smoke test bundle
+        run: dist\rigtop\rigtop.exe --version
+
+      - name: Build Inno Setup installer
+        run: iscc /DAppVersion=${{ needs.bump.outputs.tag }} rigtop.iss
+
+      - name: Upload installer to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.bump.outputs.tag }}
+          files: installer/rigtop-*-setup.exe
