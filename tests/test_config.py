@@ -204,6 +204,94 @@ class TestLoadConfig:
         assert cfg.interval == 3.0
 
 
+class TestPerRigRigctld:
+    def test_per_rig_rigctld_parsed(self, tmp_path):
+        f = tmp_path / "rigtop.toml"
+        f.write_text(textwrap.dedent("""\
+            [[rig]]
+            name = "ic705"
+            host = "127.0.0.1"
+            port = 4532
+
+            [rig.rigctld]
+            model = 3085
+            serial_port = "COM9"
+            baud_rate = 19200
+
+            [[rig]]
+            name = "ft991"
+            host = "127.0.0.1"
+            port = 4533
+
+            [rig.rigctld]
+            model = 1035
+            serial_port = "COM12"
+            baud_rate = 38400
+        """), encoding="utf-8")
+        cfg = load_config(f)
+        assert len(cfg.rigs) == 2
+        ic = cfg.rigs[0]
+        ft = cfg.rigs[1]
+        assert ic.rigctld is not None
+        assert ic.rigctld.model == 3085
+        assert ic.rigctld.serial_port == "COM9"
+        assert ft.rigctld is not None
+        assert ft.rigctld.model == 1035
+        assert ft.rigctld.serial_port == "COM12"
+
+    def test_select_rig_switches_per_rig_rigctld(self, tmp_path):
+        f = tmp_path / "rigtop.toml"
+        f.write_text(textwrap.dedent("""\
+            [[rig]]
+            name = "ic705"
+            [rig.rigctld]
+            model = 3085
+            serial_port = "COM9"
+            baud_rate = 19200
+
+            [[rig]]
+            name = "ft991"
+            [rig.rigctld]
+            model = 1035
+            serial_port = "COM12"
+            baud_rate = 38400
+        """), encoding="utf-8")
+        cfg = load_config(f)
+        cfg.select_rig("ft991")
+        assert cfg.rig.name == "ft991"
+        assert cfg.rig.rigctld is not None
+        assert cfg.rig.rigctld.model == 1035
+
+    def test_global_rigctld_fallback(self, tmp_path):
+        f = tmp_path / "rigtop.toml"
+        f.write_text(textwrap.dedent("""\
+            [[rig]]
+            name = "main"
+            host = "127.0.0.1"
+            port = 4532
+
+            [rigctld]
+            model = 3085
+            serial_port = "COM9"
+            baud_rate = 19200
+        """), encoding="utf-8")
+        cfg = load_config(f)
+        assert cfg.rig.rigctld is None   # no per-rig rigctld
+        assert cfg.rigctld is not None   # global fallback present
+        assert cfg.rigctld.model == 3085
+
+    def test_rig_without_rigctld_has_none(self, tmp_path):
+        f = tmp_path / "rigtop.toml"
+        f.write_text(textwrap.dedent("""\
+            [rig]
+            name = "simple"
+            host = "127.0.0.1"
+            port = 4532
+        """), encoding="utf-8")
+        cfg = load_config(f)
+        assert cfg.rig.rigctld is None
+
+
 class TestValidation:
     def test_invalid_log_level(self):
         with pytest.raises(Exception):

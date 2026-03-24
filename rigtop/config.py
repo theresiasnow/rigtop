@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+import sys
 import tomllib
 from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+def _default_serial_port() -> str:
+    """Return a platform-appropriate serial port placeholder."""
+    if sys.platform == "win32":
+        return "COM9"
+    if sys.platform == "darwin":
+        return "/dev/cu.usbserial-0001"
+    return "/dev/ttyUSB0"
 
 
 class LogLevel(StrEnum):
@@ -41,6 +51,7 @@ class RigConfig(BaseModel):
     att_settable: bool = True  # set False if hamlib returns RPRT -9 for ATT (e.g. IC-705)
     modes: list[str] = Field(default_factory=DEFAULT_MODES.copy)
     has_data_modes: bool = True  # show Data button (maps FM↔PKTFM etc.)
+    rigctld: RigctldConfig | None = None  # per-rig serial config; overrides global [rigctld]
 
     @field_validator("att_steps")
     @classmethod
@@ -95,7 +106,7 @@ class PttType(StrEnum):
 
 class RigctldConfig(BaseModel):
     model: int = 3085
-    serial_port: str = "COM9"
+    serial_port: str = Field(default_factory=_default_serial_port)
     baud_rate: int = 19200
     data_bits: Literal[5, 6, 7, 8] = 8
     stop_bits: Literal[1, 2] = 1

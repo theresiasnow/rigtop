@@ -4,11 +4,20 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 import threading
 import time
 from collections.abc import Callable
 
 from loguru import logger
+
+
+def _default_serial_port() -> str:
+    if sys.platform == "win32":
+        return "COM9"
+    if sys.platform == "darwin":
+        return "/dev/cu.usbserial-0001"
+    return "/dev/ttyUSB0"
 
 # Map Python log-level names to rigctld -v flag count.
 
@@ -20,7 +29,7 @@ class RigctldLauncher:
         self,
         *,
         model: int = 3085,
-        serial_port: str = "COM9",
+        serial_port: str = _default_serial_port(),
         baud_rate: int = 19200,
         data_bits: int = 8,
         stop_bits: int = 1,
@@ -107,10 +116,14 @@ class RigctldLauncher:
         """Start rigctld and wait *settle* seconds for it to be ready."""
         cmd = self._build_command()
         logger.info("Starting rigctld: {}", " ".join(cmd))
+        kwargs: dict = {}
+        if sys.platform == "win32":
+            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
         self._proc = subprocess.Popen(
             cmd,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE if self.stderr_callback else subprocess.DEVNULL,
+            **kwargs,
         )
         # Spawn a reader thread for stderr if a callback was provided.
         if self.stderr_callback and self._proc.stderr:

@@ -123,6 +123,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=False,
         help="Scan LAN for radios and rigctld instances, then exit",
     )
+    parser.add_argument(
+        "--rig",
+        metavar="NAME",
+        default=None,
+        help="Select rig by name from config (default: first defined rig)",
+    )
     return parser
 
 
@@ -151,8 +157,11 @@ def _apply_cli_overrides(cfg: Config, args: argparse.Namespace) -> tuple[Config,
         cfg.once = True
     if args.no_meters:
         cfg.meters = False
+    if getattr(args, "rig", None):
+        cfg.select_rig(args.rig)
     if args.no_rigctld:
         cfg.rigctld = None
+        cfg.rig.rigctld = None
     if args.no_direwolf and cfg.direwolf is not None:
         cfg.direwolf.install_path = None
     if args.no_gps:
@@ -200,11 +209,14 @@ def _wire_buffers(
 
 
 def _start_rigctld(cfg: Config) -> tuple[RigctldLauncher | None, DirewolfBuffer | None]:
-    """Create and start the rigctld launcher if configured."""
-    if cfg.rigctld is None:
+    """Create and start the rigctld launcher if configured.
+
+    Per-rig ``[rig.rigctld]`` takes precedence over the global ``[rigctld]`` block.
+    """
+    rc = cfg.rig.rigctld or cfg.rigctld
+    if rc is None:
         return None, None
 
-    rc = cfg.rigctld
     _console.print(f"  [cyan][3/8][/cyan] Starting rigctld (model {rc.model}, {rc.serial_port})…")
     buf = DirewolfBuffer()
     launcher = RigctldLauncher(

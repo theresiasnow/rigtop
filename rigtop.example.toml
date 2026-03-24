@@ -8,7 +8,10 @@ meters = true          # show rig meter values (ALC, SWR, power, etc.)
 log_level = "WARNING" # DEBUG, INFO, WARNING, ERROR (also controls rigctld -v)
 
 # --- Rig (rigctld) — always used for GPS, frequency, mode, meters ---
-# Use [rig] for a single radio, or [[rig]] entries for multiple (select with :rig <name>).
+#
+# Single rig: use [rig] + [rigctld].
+# Multiple rigs: use [[rig]] entries with [rig.rigctld] per rig; select at startup
+#   with --rig <name> (e.g. `uv run rigtop --rig ft991`).
 #
 # Capability hints let the TUI adapt to your radio without source code changes:
 #   att_steps     — ATT dB steps your radio supports (default [0,6,12,18])
@@ -16,55 +19,78 @@ log_level = "WARNING" # DEBUG, INFO, WARNING, ERROR (also controls rigctld -v)
 #   modes         — modes shown in the dropdown (omit unsupported ones)
 #   has_data_modes — false to hide the Data button (for radios without PKT modes)
 
-# IC-705 — ATT read-only via hamlib
-[rig]
-name = "IC-705"
-host = "127.0.0.1"
-port = 4532
-att_settable  = false
-att_steps     = [0, 6, 12, 18]
+# ---- Single-rig example (one radio, one [rig] block) ----
 
-# --- Additional rig examples (uncomment and rename [rig] → [[rig]] to use multiple) ---
-
-# IC-7300 — ATT settable, same steps
-# [[rig]]
-# name         = "IC-7300"
-# host         = "127.0.0.1"
-# port         = 4533
-# att_settable = true
-# att_steps    = [0, 6, 12, 18]
-
-# IC-9700 (VHF/UHF — similar caps to IC-705)
-# [[rig]]
-# name         = "IC-9700"
-# port         = 4534
+# [rig]
+# name = "IC-705"
+# host = "127.0.0.1"
+# port = 4532
 # att_settable = false
-# att_steps    = [0, 3, 6, 9, 12, 15, 18]
+# att_steps    = [0, 6, 12, 18]
+#
+# [rigctld]               # global rigctld used when [rig.rigctld] is absent
+# model       = 3085      # Hamlib rig model (3085 = IC-705)
+# serial_port = "COM9"   # serial port (COM9, /dev/ttyUSB0, etc.)
+# baud_rate   = 19200     # serial baud rate (1200..115200)
 
-# FT-991A — no Icom packet modes, different ATT steps
+# ---- Multi-rig example (two radios, select with --rig <name>) ----
+# Each [[rig]] block can carry its own [rig.rigctld] serial config.
+# The global [rigctld] block (below) is used as a fallback when a rig
+# has no [rig.rigctld] of its own.
+
+# IC-705 — ATT read-only via hamlib
+[[rig]]
+name         = "IC-705"
+host         = "127.0.0.1"
+port         = 4532
+att_settable = false
+att_steps    = [0, 6, 12, 18]
+
+[rig.rigctld]
+model       = 3085           # Hamlib rig model
+serial_port = "COM9"         # Windows: COM9   Linux: /dev/ttyUSB0   Mac: /dev/cu.usbserial-0001
+baud_rate   = 19200          # serial baud rate (1200..115200)
+data_bits   = 8              # data bits (5..8)
+stop_bits   = 1              # stop bits (1 or 2)
+serial_parity    = "None"    # parity: None, Odd, Even, Mark, Space
+serial_handshake = "None"    # handshake: None, XONXOFF, Hardware
+dtr_state = "Unset"          # DTR state: Unset, ON, OFF
+rts_state = "Unset"          # RTS state: Unset, ON, OFF
+ptt_type  = "RIG"            # PTT type: RIG, RIGMICDATA, DTR, RTS, Parallel, CM108, GPIO, GPION, None
+ptt_pathname = ""             # PTT device path (e.g. COM10) — blank = same as rig
+ptt_share = false             # true to share PTT port with other apps
+
+# FT-991A — different model, port, and serial settings
 # [[rig]]
 # name           = "FT-991A"
-# port           = 4535
+# host           = "127.0.0.1"
+# port           = 4533
 # att_settable   = true
 # att_steps      = [0, 6, 12]
 # has_data_modes = false
 # modes          = ["FM", "USB", "LSB", "AM", "CW", "CWR", "RTTY", "RTTYR", "PKTFM", "PKTUSB"]
+#
+# [rig.rigctld]
+# model       = 1035
+# serial_port = "COM12"
+# baud_rate   = 38400
 
-# --- rigctld launcher (auto-start rigctld) ---
-# Remove this section or use --no-rigctld to skip auto-launch.
-[rigctld]
-model = 3085           # Hamlib rig model (3085 = IC-705)
-serial_port = "COM9"  # serial port (COM9, /dev/ttyUSB0, etc.)
-baud_rate = 19200      # serial baud rate (1200..115200)
-data_bits = 8          # data bits (5..8)
-stop_bits = 1          # stop bits (1 or 2)
-serial_parity = "None" # parity: None, Odd, Even, Mark, Space
-serial_handshake = "None" # handshake: None, XONXOFF, Hardware
-dtr_state = "Unset"    # DTR state: Unset, ON, OFF
-rts_state = "Unset"    # RTS state: Unset, ON, OFF
-ptt_type = "RIG"       # PTT type: RIG, RIGMICDATA, DTR, RTS, Parallel, CM108, GPIO, GPION, None
-ptt_pathname = ""      # PTT device path (e.g. COM10, /dev/ttyUSB1) — blank = same as rig
-ptt_share = false      # true to share PTT port with other apps
+# IC-9700 (VHF/UHF — no per-rig rigctld; uses global [rigctld] fallback)
+# [[rig]]
+# name         = "IC-9700"
+# host         = "127.0.0.1"
+# port         = 4534
+# att_settable = false
+# att_steps    = [0, 3, 6, 9, 12, 15, 18]
+
+# --- Global rigctld fallback (used for any rig without its own [rig.rigctld]) ---
+# Remove this section and add [rig.rigctld] to each [[rig]] block instead,
+# or use --no-rigctld to connect to a pre-running rigctld instance.
+# [rigctld]
+# model       = 3085
+# serial_port = "COM9"
+# baud_rate   = 19200
+# ptt_type    = "RIG"
 
 # --- GPS Fallback (optional) ---
 # If the rig has no GPS fix, fall back to iOS GPS2IP app.

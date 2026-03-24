@@ -13,13 +13,17 @@ from pathlib import Path
 from loguru import logger
 
 
+def _default_install_path() -> str:
+    return "c:\\direwolf" if sys.platform == "win32" else ""
+
+
 class DirewolfLauncher:
     """Spawn ``direwolf`` and keep a handle so we can tear it down later."""
 
     def __init__(
         self,
         *,
-        install_path: str = "c:\\direwolf",
+        install_path: str = _default_install_path(),
         config_dir: str | Path | None = None,
         source_configs: dict[str, Path] | None = None,
         stderr_callback: Callable[[str], None] | None = None,
