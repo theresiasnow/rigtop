@@ -65,7 +65,7 @@ def _probe(host: str, port: int, timeout: float) -> dict | None:
             s.settimeout(0.5)
             try:
                 banner = s.recv(256).decode("ascii", errors="replace").strip()
-            except TimeoutError, OSError:
+            except (TimeoutError, OSError):
                 banner = ""
             return {
                 "host": host,
@@ -73,7 +73,7 @@ def _probe(host: str, port: int, timeout: float) -> dict | None:
                 "service": _PORTS.get(port, "unknown"),
                 "banner": banner,
             }
-    except OSError, TimeoutError:
+    except (OSError, TimeoutError):
         return None
 
 

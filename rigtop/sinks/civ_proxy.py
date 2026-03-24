@@ -263,7 +263,7 @@ class CivProxySink(PositionSink):
         if freq:
             try:
                 self._freq_hz = int(float(freq))
-            except ValueError, TypeError:
+            except (ValueError, TypeError):
                 pass
         mode = kwargs.get("mode")
         if mode:
@@ -272,7 +272,7 @@ class CivProxySink(PositionSink):
         if passband is not None:
             try:
                 self._passband = int(passband)
-            except ValueError, TypeError:
+            except (ValueError, TypeError):
                 pass
         ptt = kwargs.get("ptt")
         if ptt is not None:
