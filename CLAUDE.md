@@ -41,14 +41,14 @@ rigtop/
     wsjtx.py       # WSJT-X UDP grid update sink
     civ_proxy.py   # Icom CI-V serial proxy (dedicated rigctld socket)
     console.py     # plain stdout sink
-  direwolf_launcher.py  # start/stop Direwolf via winpty (Windows PTY)
+  direwolf_launcher.py  # start/stop Direwolf (ConPTY on Windows, pipe on Linux/Mac)
   rigctld_launcher.py   # start/stop rigctld subprocess
   discovery.py          # LAN scan for radio services
 tests/
-  test_geo.py      # 22 tests — geo functions
-  test_config.py   # 21 tests — TOML loading, validation
-  test_app.py      # 19 tests — TxWatchdog, resolve_position, collect_meters
-  test_buffers.py  # 30 tests — AprsBuffer, MessageBuffer, DirewolfBuffer
+  test_geo.py      # geo functions
+  test_config.py   # TOML loading, validation, multi-rig
+  test_app.py      # TxWatchdog, resolve_position, collect_meters
+  test_buffers.py  # AprsBuffer, MessageBuffer, DirewolfBuffer
 ```
 
 ## Code style
@@ -65,6 +65,8 @@ tests/
 - `TxWatchdog`, `resolve_position`, `collect_meters` live in `app.py` — use them from there
 - Zone lookups always go through `rigtop.zones.lookup(lat, lon)` (cached, offline)
 - Config is loaded once in `cli.main()` — pass values down, don't re-read TOML at runtime
+- Multiple rigs: use `[[rig]]` + `[rig.rigctld]` in TOML; `cfg.select_rig(name)` switches active rig
+- `except (A, B):` — always use tuple form; bare `except A, B:` silently only catches `A` in Python 3
 
 ## Commit messages
 
@@ -88,9 +90,10 @@ The CI `commit-lint` job runs `cz check` on every PR and will fail on non-confor
 ## Running
 
 ```
-uv run rigtop               # full TUI
-uv run rigtop --console     # plain console mode
-uv run rigtop --scan        # LAN scan
-uv run pytest tests/        # unit tests
-uv run ruff check rigtop/   # lint
+uv run rigtop                    # full TUI (first rig)
+uv run rigtop --rig <name>       # select rig by name from [[rig]] config
+uv run rigtop --console          # plain console mode
+uv run rigtop --scan             # LAN scan
+uv run pytest tests/             # unit tests
+uv run ruff check rigtop/        # lint
 ```
