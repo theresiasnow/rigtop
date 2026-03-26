@@ -10,6 +10,7 @@ from collections import deque
 from typing import ClassVar
 
 from loguru import logger
+from rich.table import Table
 from rich.text import Text
 from textual import on, work
 from textual.app import App, ComposeResult
@@ -889,6 +890,30 @@ _AURORA_STYLE: dict[str, str] = {
 }
 
 
+def _parse_bands(elements) -> dict[str, dict[str, str]]:
+    bands: dict[str, dict[str, str]] = {}
+    for el in elements:
+        name = el.get("name", "")
+        time = el.get("time", "")
+        cond = (el.text or "").strip()
+        if name and time and cond:
+            if name not in bands:
+                bands[name] = {}
+            bands[name][time] = cond
+    return bands
+
+
+def _append_band_row(txt: Text, label: str, cond: dict, margin: str = " ") -> None:
+    day = cond.get("day", "?")
+    night = cond.get("night", "?")
+    txt.append(f"{margin}{label}", style="dim")
+    txt.append("☀ ", style="yellow")
+    txt.append(f"{day:<5}", style=_COND_STYLE.get(day, "dim"))
+    txt.append(" ☾ ", style="cyan")
+    txt.append(night, style=_COND_STYLE.get(night, "dim"))
+    txt.append("\n")
+
+
 def _fetch_propagation() -> dict | None:
     """Fetch solar propagation data from HamQSL XML feed.
 
@@ -919,18 +944,9 @@ def _fetch_propagation() -> dict | None:
             el = solar.find(tag)
             if el is not None and el.text:
                 result[key] = el.text.strip()
-        bands: dict[str, dict[str, str]] = {}
-        for band_el in solar.findall(".//calculatedconditions/band"):
-            name = band_el.get("name", "")
-            time = band_el.get("time", "")
-            cond = (band_el.text or "").strip()
-            if name and time and cond:
-                if name not in bands:
-                    bands[name] = {}
-                bands[name][time] = cond
-        result["bands"] = bands
+        result["bands"] = _parse_bands(solar.findall(".//calculatedconditions/band"))
         vhf: dict = {"aurora": {}, "bands": {}}
-        vhf_section = solar.find(".//calculatedvhf")
+        vhf_section = solar.find("calculatedvhf")
         if vhf_section is not None:
             for ph in vhf_section.findall("phenomenon"):
                 ph_name = ph.get("name", "")
@@ -940,14 +956,7 @@ def _fetch_propagation() -> dict | None:
                     vhf["aurora"]["vhf"] = ph_val
                 elif ph_name == "aurora" and ph_loc:
                     vhf["aurora"][ph_loc] = ph_val
-            for band_el in vhf_section.findall("band"):
-                bname = band_el.get("name", "")
-                btime = band_el.get("time", "")
-                bcond = (band_el.text or "").strip()
-                if bname and btime and bcond:
-                    if bname not in vhf["bands"]:
-                        vhf["bands"][bname] = {}
-                    vhf["bands"][bname][btime] = bcond
+            vhf["bands"] = _parse_bands(vhf_section.findall("band"))
         result["vhf"] = vhf
     except Exception as exc:
         logger.debug("Propagation fetch failed: {}", exc)
@@ -966,8 +975,6 @@ class PropagationPanel(Static):
         self.update(txt)
 
     def render_data(self, data: dict | None) -> None:
-        from rich.table import Table
-
         self.border_title = "Propagation"
         M = " "
 
@@ -1026,16 +1033,8 @@ class PropagationPanel(Static):
         bands: dict[str, dict[str, str]] = data.get("bands", {})
         for band_name in _BAND_ORDER:
             cond = bands.get(band_name, {})
-            if not cond:
-                continue
-            day = cond.get("day", "?")
-            night = cond.get("night", "?")
-            left.append(f"{M}{band_name:<9}", style="dim")
-            left.append("☀ ", style="yellow")
-            left.append(f"{day:<5}", style=_COND_STYLE.get(day, "dim"))
-            left.append(" ☾ ", style="cyan")
-            left.append(night, style=_COND_STYLE.get(night, "dim"))
-            left.append("\n")
+            if cond:
+                _append_band_row(left, f"{band_name:<9}", cond)
 
         # ── Timestamp ────────────────────────────────────────────────────────
         updated = data.get("updated", "")
@@ -1067,16 +1066,8 @@ class PropagationPanel(Static):
         vhf_bands: dict[str, dict[str, str]] = vhf.get("bands", {})
         for band_key, band_label in _VHF_BAND_ORDER:
             cond = vhf_bands.get(band_key, {})
-            if not cond:
-                continue
-            day = cond.get("day", "?")
-            night = cond.get("night", "?")
-            right.append(f"{M}{band_label}", style="dim")
-            right.append("☀ ", style="yellow")
-            right.append(f"{day:<5}", style=_COND_STYLE.get(day, "dim"))
-            right.append(" ☾ ", style="cyan")
-            right.append(night, style=_COND_STYLE.get(night, "dim"))
-            right.append("\n")
+            if cond:
+                _append_band_row(right, band_label, cond)
 
         table = Table.grid(padding=(0, 2))
         table.add_column()
