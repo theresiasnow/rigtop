@@ -87,6 +87,23 @@ ci: only build wheel on main branch
 
 The CI `commit-lint` job runs `cz check` on every PR and will fail on non-conforming messages. This applies to all commits — including auto-generated ones (e.g. from Copilot suggestions). If a bad commit lands on the branch, rebase and amend before pushing.
 
+## PR workflow
+
+For every feature or fix:
+
+1. **Branch** — always work on a `feat/` or `fix/` branch, never commit directly to `main`
+2. **Implement** — lint (`uv run ruff check rigtop/`) and test (`uv run pytest tests/`) before pushing
+3. **PR** — create a pull request with a clear summary and test plan
+4. **Copilot review** — assign `copilot-pull-request-reviewer[bot]` as reviewer:
+   ```
+   gh pr edit <number> --add-reviewer "copilot-pull-request-reviewer[bot]"
+   ```
+5. **Check review** — read Copilot's comments and address any issues before merging:
+   ```
+   gh api repos/theresiasnow/rigtop/pulls/<number>/reviews --jq '.[] | {user: .user.login, state, body}'
+   gh api repos/theresiasnow/rigtop/pulls/<number>/comments --jq '.[] | {path, line, body}'
+   ```
+
 ## Running
 
 ```
