@@ -52,6 +52,25 @@ rigtop/
 - **S-meter** — received signal strength; S9 = -73 dBm reference, each S-unit = 6 dB
 - **SWR** — Standing Wave Ratio; 1.0 = perfect, >3.0 = dangerous
 
+## Commit messages
+
+All commits **must** follow [Conventional Commits](https://www.conventionalcommits.org/) format, enforced by commitizen (`cz check`):
+
+```
+type(scope)?: short description
+```
+
+Valid types: `build`, `bump`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`
+
+Examples:
+```
+feat(tui): add waterfall panel
+fix(rigctld): handle None response from get_level
+chore: initial planning notes
+```
+
+This applies to **every** commit, including planning and scaffolding commits. The CI `commit-lint` job runs `cz check` on every PR and will fail on non-conforming messages.
+
 ## Code review focus areas
 
 When reviewing PRs, pay attention to:
