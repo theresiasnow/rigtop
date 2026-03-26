@@ -1,3 +1,9 @@
+## v0.10.0 (2026-03-26)
+
+### Feat
+
+- **tui**: add VHF/UHF band conditions and aurora column to propagation panel (#19)
+
 ## v0.9.0 (2026-03-26)
 
 ### Feat
