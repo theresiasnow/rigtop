@@ -870,6 +870,145 @@ class StationPanel(Static):
         self.update(txt)
 
 
+# ── Propagation data ─────────────────────────────────────────────────────────
+
+_BAND_ORDER: list[str] = ["80m-40m", "30m-20m", "17m-15m", "12m-10m"]
+_COND_STYLE: dict[str, str] = {"Good": "bold green", "Fair": "bold yellow", "Poor": "bold red"}
+
+
+def _fetch_propagation() -> dict | None:
+    """Fetch solar propagation data from HamQSL XML feed.
+
+    Returns a dict with keys: sfi, sn, aindex, kindex, xray, updated, bands.
+    bands is a nested dict: {band_name: {day: condition, night: condition}}.
+    Returns None on any network or parse failure.
+    """
+    import urllib.request
+    import xml.etree.ElementTree as ET
+
+    url = "https://www.hamqsl.com/solarxml.php"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            xml_data = resp.read()
+        root = ET.fromstring(xml_data)
+        solar = root.find(".//solardata")
+        if solar is None:
+            return None
+        result: dict = {}
+        for tag, key in (
+            ("solarflux", "sfi"),
+            ("aindex", "aindex"),
+            ("kindex", "kindex"),
+            ("xray", "xray"),
+            ("sunspots", "sn"),
+            ("updated", "updated"),
+        ):
+            el = solar.find(tag)
+            if el is not None and el.text:
+                result[key] = el.text.strip()
+        bands: dict[str, dict[str, str]] = {}
+        for band_el in solar.findall(".//calculatedconditions/band"):
+            name = band_el.get("name", "")
+            time = band_el.get("time", "")
+            cond = (band_el.text or "").strip()
+            if name and time and cond:
+                if name not in bands:
+                    bands[name] = {}
+                bands[name][time] = cond
+        result["bands"] = bands
+    except Exception as exc:
+        logger.debug("Propagation fetch failed: {}", exc)
+        return None
+    else:
+        return result
+
+
+class PropagationPanel(Static):
+    """Shows solar propagation indices and HF band conditions (HamQSL feed)."""
+
+    def on_mount(self) -> None:
+        self.border_title = "Propagation"
+        txt = Text()
+        txt.append(" Fetching…", style="dim")
+        self.update(txt)
+
+    def render_data(self, data: dict | None) -> None:
+        self.border_title = "Propagation"
+        txt = Text()
+        M = " "
+
+        if data is None:
+            txt.append(f"{M}No propagation data — check network", style="dim red")
+            self.update(txt)
+            return
+
+        # ── Solar indices row ────────────────────────────────────────────────
+        sfi = data.get("sfi", "?")
+        sn = data.get("sn", "?")
+        aindex = data.get("aindex", "?")
+        kindex = data.get("kindex", "?")
+        xray = data.get("xray", "")
+
+        def _int_or_none(val: str) -> int | None:
+            try:
+                return int(val)
+            except ValueError, TypeError:
+                return None
+
+        aval = _int_or_none(str(aindex))
+        astyle = (
+            "bold green"
+            if aval is not None and aval <= 7
+            else ("bold yellow" if aval is not None and aval <= 29 else "bold red")
+        )
+        kval = _int_or_none(str(kindex))
+        kstyle = (
+            "bold green"
+            if kval is not None and kval <= 2
+            else ("bold yellow" if kval is not None and kval <= 4 else "bold red")
+        )
+
+        txt.append(f"{M}SFI ", style="dim")
+        txt.append(f"{sfi}", style="bold cyan")
+        txt.append("  SN ", style="dim")
+        txt.append(f"{sn}", style="bold cyan")
+        txt.append("  A ", style="dim")
+        txt.append(f"{aindex}", style=astyle)
+        txt.append("  K ", style="dim")
+        txt.append(f"{kindex}", style=kstyle)
+        if xray:
+            txt.append("  X-ray ", style="dim")
+            xstyle = (
+                "bold red"
+                if xray.startswith(("X", "M"))
+                else ("bold yellow" if xray.startswith("C") else "dim")
+            )
+            txt.append(xray, style=xstyle)
+        txt.append("\n")
+
+        # ── Band conditions ──────────────────────────────────────────────────
+        bands: dict[str, dict[str, str]] = data.get("bands", {})
+        for band_name in _BAND_ORDER:
+            cond = bands.get(band_name, {})
+            if not cond:
+                continue
+            day = cond.get("day", "?")
+            night = cond.get("night", "?")
+            txt.append(f"{M}{band_name:<9}", style="dim")
+            txt.append("☀ ", style="yellow")
+            txt.append(f"{day:<5}", style=_COND_STYLE.get(day, "dim"))
+            txt.append(" ☾ ", style="cyan")
+            txt.append(night, style=_COND_STYLE.get(night, "dim"))
+            txt.append("\n")
+
+        # ── Timestamp ────────────────────────────────────────────────────────
+        updated = data.get("updated", "")
+        if updated:
+            txt.append(f"{M}{updated}", style="dim")
+
+        self.update(txt)
+
+
 class ConnectionBar(Static):
     """Multi-line connection status for all active sinks and sources."""
 
@@ -1024,6 +1163,12 @@ class RigtopApp(App[None]):
         width: 16;
         margin: 0 1;
     }
+    PropagationPanel {
+        height: 7;  /* 1 indices + up to 4 bands + 1 timestamp + 2 border */
+        border: round $surface;
+        padding: 0 1;
+        border-title-color: $text-muted;
+    }
     WaterfallPanel {
         height: 1fr;
         border: round $surface;
@@ -1152,6 +1297,7 @@ class RigtopApp(App[None]):
         with Horizontal(id="top-row"):
             yield RigPanel(id="rig-panel")
             yield StationPanel(id="station-panel")
+        yield PropagationPanel(id="prop-panel")
         yield WaterfallPanel(id="waterfall")
         yield RigControlPanel(self._rig, id="ctrl-panel")
         yield RigCommandPanel(self._rig, rig_config=self._rig_config, id="cmd-panel")
@@ -1182,6 +1328,7 @@ class RigtopApp(App[None]):
         self._refresh_conn_bar()
         self._start_poll()
         self._start_conn_refresh()
+        self._start_prop_fetch()
         self.query_one("#cmd-input", Input).focus()
 
     def on_rig_command_panel_control_changed(self, msg: RigCommandPanel.ControlChanged) -> None:
@@ -1287,6 +1434,17 @@ class RigtopApp(App[None]):
         while True:
             await asyncio.sleep(2.0)
             self._refresh_conn_bar()
+
+    @work(thread=True, exclusive=False, name="prop-fetch")
+    def _start_prop_fetch(self) -> None:
+        """Background thread: fetch propagation data on startup and every 15 minutes."""
+        _PROP_INTERVAL = 900  # seconds
+        data = _fetch_propagation()
+        self.call_from_thread(self.query_one(PropagationPanel).render_data, data)
+        while True:
+            _time.sleep(_PROP_INTERVAL)
+            data = _fetch_propagation()
+            self.call_from_thread(self.query_one(PropagationPanel).render_data, data)
 
     def _do_poll(self) -> dict:
         rig = self._rig
