@@ -1,3 +1,9 @@
+## v0.9.0 (2026-03-26)
+
+### Feat
+
+- **tui**: add propagation panel with solar indices and band conditions (#18)
+
 ## v0.8.0 (2026-03-26)
 
 ### Feat
