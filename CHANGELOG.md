@@ -1,3 +1,9 @@
+## v0.8.0 (2026-03-26)
+
+### Feat
+
+- **app**: add CQ zone to console output and :info command (#16)
+
 ## v0.7.3 (2026-03-24)
 
 ## v0.7.2 (2026-03-24)
