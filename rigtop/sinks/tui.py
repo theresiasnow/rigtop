@@ -1393,6 +1393,8 @@ class RigtopApp(App[None]):
             "mode": mode or "",
             "grid": grid,
             "gps": gps_src,
+            "cq": location.get("cq", "") if location else "",
+            "iaru": location.get("iaru", "") if location else "",
         }
 
         # Update widgets
@@ -2002,6 +2004,8 @@ class RigtopApp(App[None]):
                 parts.insert(1, f"{float(i['freq']) / 1e6:.6f} MHz")
             except ValueError, TypeError:
                 pass
+        if i.get("cq"):
+            parts.append(f"CQ {i['cq']}")
         self.notify("  ".join(parts) if parts else "No info")
 
     def _cmd_help(self) -> None:

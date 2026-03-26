@@ -14,6 +14,7 @@ from rigtop.geo import maidenhead
 from rigtop.sinks import PositionSink
 from rigtop.sources import GpsSource, Position
 from rigtop.sources.rigctld import RigctldSource
+from rigtop.zones import lookup as _zone_lookup
 
 
 def _is_tui(sink: PositionSink) -> bool:
@@ -137,6 +138,11 @@ def _print_cycle(
         return
     gps_src = extras.get("gps_src", "?")
     print(f"[{now_str}] {pos.lat:.6f}, {pos.lon:.6f}  Grid: {grid}  (GPS: {gps_src})")
+    location = extras.get("location")
+    if location:
+        cq = location.get("cq", "?")
+        iaru = location.get("iaru", "?")
+        print(f"  Zones: CQ {cq}  ITU {iaru}")
     freq = extras.get("freq")
     mode = extras.get("mode")
     if freq or mode:
@@ -281,6 +287,7 @@ def run(
                     "mode": mode,
                     "passband": passband,
                     "ptt": rig.get_ptt(),
+                    "location": _zone_lookup(pos.lat, pos.lon),
                 }
 
                 wd.update(extras["ptt"], rig, extras, tui_sink)
