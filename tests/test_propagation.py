@@ -2,9 +2,20 @@
 
 from __future__ import annotations
 
+from io import StringIO
 from unittest.mock import MagicMock, patch
 
+from rich.console import Console
+
 from rigtop.sinks.tui import PropagationPanel, _fetch_propagation
+
+
+def _render(obj) -> str:
+    """Render a Rich renderable (Text or Table) to a plain string."""
+    sio = StringIO()
+    console = Console(file=sio, highlight=False, markup=False, no_color=True, width=200)
+    console.print(obj)
+    return sio.getvalue()
 
 _SAMPLE_XML = b"""<?xml version="1.0" encoding="utf-8"?>
 <solar>
@@ -25,6 +36,19 @@ _SAMPLE_XML = b"""<?xml version="1.0" encoding="utf-8"?>
       <band name="12m-10m" time="day">Poor</band>
       <band name="12m-10m" time="night">Poor</band>
     </calculatedconditions>
+    <calculatedvhf>
+      <phenomenon name="aurora" location="north">Minor</phenomenon>
+      <phenomenon name="aurora" location="south">No Aurora</phenomenon>
+      <phenomenon name="vhf-aurora">No</phenomenon>
+      <band name="50mhz" time="day">Good</band>
+      <band name="50mhz" time="night">Fair</band>
+      <band name="144mhz" time="day">Fair</band>
+      <band name="144mhz" time="night">Poor</band>
+      <band name="222mhz" time="day">Poor</band>
+      <band name="222mhz" time="night">Poor</band>
+      <band name="432mhz" time="day">Poor</band>
+      <band name="432mhz" time="night">Poor</band>
+    </calculatedvhf>
   </solardata>
 </solar>
 """
@@ -82,6 +106,23 @@ class TestFetchPropagation:
         assert result is not None
         assert result["bands"] == {}
 
+    def test_returns_vhf_bands(self):
+        with patch("urllib.request.urlopen", return_value=self._make_response(_SAMPLE_XML)):
+            result = _fetch_propagation()
+        assert result is not None
+        vhf = result.get("vhf", {})
+        assert vhf["bands"]["50mhz"]["day"] == "Good"
+        assert vhf["bands"]["144mhz"]["night"] == "Poor"
+
+    def test_returns_vhf_aurora(self):
+        with patch("urllib.request.urlopen", return_value=self._make_response(_SAMPLE_XML)):
+            result = _fetch_propagation()
+        assert result is not None
+        aurora = result.get("vhf", {}).get("aurora", {})
+        assert aurora["north"] == "Minor"
+        assert aurora["south"] == "No Aurora"
+        assert aurora["vhf"] == "No"
+
 
 class TestPropagationPanelRenderData:
     def _panel(self) -> PropagationPanel:
@@ -94,7 +135,7 @@ class TestPropagationPanelRenderData:
         p = self._panel()
         p.render_data(None)
         p.update.assert_called_once()
-        rendered = str(p.update.call_args[0][0])
+        rendered = _render(p.update.call_args[0][0])
         assert "No propagation data" in rendered
 
     def test_render_good_data_shows_sfi(self):
@@ -113,7 +154,7 @@ class TestPropagationPanelRenderData:
         }
         p.render_data(data)
         p.update.assert_called_once()
-        rendered = str(p.update.call_args[0][0])
+        rendered = _render(p.update.call_args[0][0])
         assert "150" in rendered
         assert "120" in rendered
         assert "80m-40m" in rendered
@@ -131,7 +172,7 @@ class TestPropagationPanelRenderData:
             "bands": {},
         }
         p.render_data(data)
-        rendered = str(p.update.call_args[0][0])
+        rendered = _render(p.update.call_args[0][0])
         assert "2024 Jun 15" in rendered
 
     def test_render_high_a_index_no_crash(self):
@@ -153,5 +194,44 @@ class TestPropagationPanelRenderData:
             "xray": "M1.5", "bands": {},
         }
         p.render_data(data)
-        rendered = str(p.update.call_args[0][0])
+        rendered = _render(p.update.call_args[0][0])
         assert "M1.5" in rendered
+
+    def test_render_vhf_bands(self):
+        p = self._panel()
+        data = {
+            "sfi": "120", "sn": "80", "aindex": "3", "kindex": "1", "bands": {},
+            "vhf": {
+                "aurora": {"north": "Minor", "south": "No Aurora", "vhf": "No"},
+                "bands": {
+                    "50mhz": {"day": "Good", "night": "Fair"},
+                    "144mhz": {"day": "Fair", "night": "Poor"},
+                },
+            },
+        }
+        p.render_data(data)
+        rendered = _render(p.update.call_args[0][0])
+        assert "50 MHz" in rendered
+        assert "144MHz" in rendered
+        assert "Good" in rendered
+
+    def test_render_aurora(self):
+        p = self._panel()
+        data = {
+            "sfi": "120", "sn": "80", "aindex": "3", "kindex": "1", "bands": {},
+            "vhf": {
+                "aurora": {"north": "Active", "south": "Minor", "vhf": "Yes"},
+                "bands": {},
+            },
+        }
+        p.render_data(data)
+        rendered = _render(p.update.call_args[0][0])
+        assert "Active" in rendered
+        assert "Minor" in rendered
+
+    def test_render_no_vhf_key_no_crash(self):
+        p = self._panel()
+        data = {"sfi": "100", "sn": "50", "aindex": "8", "kindex": "3", "bands": {}}
+        p.render_data(data)
+        p.update.assert_called_once()
+

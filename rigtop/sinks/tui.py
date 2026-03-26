@@ -10,6 +10,7 @@ from collections import deque
 from typing import ClassVar
 
 from loguru import logger
+from rich.table import Table
 from rich.text import Text
 from textual import on, work
 from textual.app import App, ComposeResult
@@ -873,7 +874,44 @@ class StationPanel(Static):
 # ── Propagation data ─────────────────────────────────────────────────────────
 
 _BAND_ORDER: list[str] = ["80m-40m", "30m-20m", "17m-15m", "12m-10m"]
+_VHF_BAND_ORDER: list[tuple[str, str]] = [
+    ("50mhz", "50 MHz "),
+    ("144mhz", "144MHz "),
+    ("222mhz", "222MHz "),
+    ("432mhz", "432MHz "),
+]
 _COND_STYLE: dict[str, str] = {"Good": "bold green", "Fair": "bold yellow", "Poor": "bold red"}
+_AURORA_STYLE: dict[str, str] = {
+    "No Aurora": "bold green",
+    "No": "bold green",
+    "Minor": "bold yellow",
+    "Active": "bold red",
+    "Major": "bold red",
+}
+
+
+def _parse_bands(elements) -> dict[str, dict[str, str]]:
+    bands: dict[str, dict[str, str]] = {}
+    for el in elements:
+        name = el.get("name", "")
+        time = el.get("time", "")
+        cond = (el.text or "").strip()
+        if name and time and cond:
+            if name not in bands:
+                bands[name] = {}
+            bands[name][time] = cond
+    return bands
+
+
+def _append_band_row(txt: Text, label: str, cond: dict, margin: str = " ") -> None:
+    day = cond.get("day", "?")
+    night = cond.get("night", "?")
+    txt.append(f"{margin}{label}", style="dim")
+    txt.append("☀ ", style="yellow")
+    txt.append(f"{day:<5}", style=_COND_STYLE.get(day, "dim"))
+    txt.append(" ☾ ", style="cyan")
+    txt.append(night, style=_COND_STYLE.get(night, "dim"))
+    txt.append("\n")
 
 
 def _fetch_propagation() -> dict | None:
@@ -906,16 +944,20 @@ def _fetch_propagation() -> dict | None:
             el = solar.find(tag)
             if el is not None and el.text:
                 result[key] = el.text.strip()
-        bands: dict[str, dict[str, str]] = {}
-        for band_el in solar.findall(".//calculatedconditions/band"):
-            name = band_el.get("name", "")
-            time = band_el.get("time", "")
-            cond = (band_el.text or "").strip()
-            if name and time and cond:
-                if name not in bands:
-                    bands[name] = {}
-                bands[name][time] = cond
-        result["bands"] = bands
+        result["bands"] = _parse_bands(solar.findall(".//calculatedconditions/band"))
+        vhf: dict = {"aurora": {}, "bands": {}}
+        vhf_section = solar.find("calculatedvhf")
+        if vhf_section is not None:
+            for ph in vhf_section.findall("phenomenon"):
+                ph_name = ph.get("name", "")
+                ph_loc = ph.get("location", "")
+                ph_val = (ph.text or "").strip()
+                if ph_name == "vhf-aurora":
+                    vhf["aurora"]["vhf"] = ph_val
+                elif ph_name == "aurora" and ph_loc:
+                    vhf["aurora"][ph_loc] = ph_val
+            vhf["bands"] = _parse_bands(vhf_section.findall("band"))
+        result["vhf"] = vhf
     except Exception as exc:
         logger.debug("Propagation fetch failed: {}", exc)
         return None
@@ -934,10 +976,10 @@ class PropagationPanel(Static):
 
     def render_data(self, data: dict | None) -> None:
         self.border_title = "Propagation"
-        txt = Text()
         M = " "
 
         if data is None:
+            txt = Text()
             txt.append(f"{M}No propagation data — check network", style="dim red")
             self.update(txt)
             return
@@ -952,7 +994,7 @@ class PropagationPanel(Static):
         def _int_or_none(val: str) -> int | None:
             try:
                 return int(val)
-            except ValueError, TypeError:
+            except (ValueError, TypeError):
                 return None
 
         aval = _int_or_none(str(aindex))
@@ -968,45 +1010,70 @@ class PropagationPanel(Static):
             else ("bold yellow" if kval is not None and kval <= 4 else "bold red")
         )
 
-        txt.append(f"{M}SFI ", style="dim")
-        txt.append(f"{sfi}", style="bold cyan")
-        txt.append("  SN ", style="dim")
-        txt.append(f"{sn}", style="bold cyan")
-        txt.append("  A ", style="dim")
-        txt.append(f"{aindex}", style=astyle)
-        txt.append("  K ", style="dim")
-        txt.append(f"{kindex}", style=kstyle)
+        left = Text()
+        left.append(f"{M}SFI ", style="dim")
+        left.append(f"{sfi}", style="bold cyan")
+        left.append("  SN ", style="dim")
+        left.append(f"{sn}", style="bold cyan")
+        left.append("  A ", style="dim")
+        left.append(f"{aindex}", style=astyle)
+        left.append("  K ", style="dim")
+        left.append(f"{kindex}", style=kstyle)
         if xray:
-            txt.append("  X-ray ", style="dim")
+            left.append("  X-ray ", style="dim")
             xstyle = (
                 "bold red"
                 if xray.startswith(("X", "M"))
                 else ("bold yellow" if xray.startswith("C") else "dim")
             )
-            txt.append(xray, style=xstyle)
-        txt.append("\n")
+            left.append(xray, style=xstyle)
+        left.append("\n")
 
-        # ── Band conditions ──────────────────────────────────────────────────
+        # ── HF band conditions ───────────────────────────────────────────────
         bands: dict[str, dict[str, str]] = data.get("bands", {})
         for band_name in _BAND_ORDER:
             cond = bands.get(band_name, {})
-            if not cond:
-                continue
-            day = cond.get("day", "?")
-            night = cond.get("night", "?")
-            txt.append(f"{M}{band_name:<9}", style="dim")
-            txt.append("☀ ", style="yellow")
-            txt.append(f"{day:<5}", style=_COND_STYLE.get(day, "dim"))
-            txt.append(" ☾ ", style="cyan")
-            txt.append(night, style=_COND_STYLE.get(night, "dim"))
-            txt.append("\n")
+            if cond:
+                _append_band_row(left, f"{band_name:<9}", cond)
 
         # ── Timestamp ────────────────────────────────────────────────────────
         updated = data.get("updated", "")
         if updated:
-            txt.append(f"{M}{updated}", style="dim")
+            left.append(f"{M}{updated}", style="dim")
 
-        self.update(txt)
+        # ── VHF/UHF + Aurora column ──────────────────────────────────────────
+        right = Text()
+        vhf = data.get("vhf", {})
+        aurora = vhf.get("aurora", {})
+        aurora_n = aurora.get("north", "")
+        aurora_s = aurora.get("south", "")
+        aurora_vhf = aurora.get("vhf", "")
+
+        right.append(f"{M}Aurora ", style="dim")
+        if aurora_n:
+            right.append("N ", style="dim")
+            right.append(aurora_n, style=_AURORA_STYLE.get(aurora_n, "dim"))
+        if aurora_s:
+            right.append("  S ", style="dim")
+            right.append(aurora_s, style=_AURORA_STYLE.get(aurora_s, "dim"))
+        if aurora_vhf:
+            right.append("  VHF ", style="dim")
+            right.append(aurora_vhf, style=_AURORA_STYLE.get(aurora_vhf, "dim"))
+        if not (aurora_n or aurora_s or aurora_vhf):
+            right.append("—", style="dim")
+        right.append("\n")
+
+        vhf_bands: dict[str, dict[str, str]] = vhf.get("bands", {})
+        for band_key, band_label in _VHF_BAND_ORDER:
+            cond = vhf_bands.get(band_key, {})
+            if cond:
+                _append_band_row(right, band_label, cond)
+
+        table = Table.grid(padding=(0, 2))
+        table.add_column()
+        table.add_column()
+        table.add_row(left, right)
+        self.update(table)
 
 
 class ConnectionBar(Static):
@@ -1164,7 +1231,7 @@ class RigtopApp(App[None]):
         margin: 0 1;
     }
     PropagationPanel {
-        height: 7;  /* 1 indices + up to 4 bands + 1 timestamp + 2 border */
+        height: 8;  /* 1 indices + 4 bands + 1 timestamp + 2 border; right col adds aurora row */
         border: round $surface;
         padding: 0 1;
         border-title-color: $text-muted;
