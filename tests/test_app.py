@@ -200,3 +200,33 @@ class TestTxWatchdog:
             wd.update(True, rig, extras, None)  # trips here
             wd.update(True, rig, extras, None)  # already tripped, no second call
         assert rig.set_ptt.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# _print_cycle
+# ---------------------------------------------------------------------------
+
+
+class TestPrintCycle:
+    _pos = Position(lat=59.33, lon=18.07)
+
+    def test_prints_zones_when_location_present(self, capsys):
+        from rigtop.app import _print_cycle
+        location = {"cq": "18", "iaru": "18", "cc": "SE", "country": "Sweden"}
+        _print_cycle("12:00:00", self._pos, "JP90qd", {"gps_src": "rig", "location": location})
+        out = capsys.readouterr().out
+        assert "CQ 18" in out
+        assert "ITU 18" in out
+
+    def test_no_zones_printed_when_location_missing(self, capsys):
+        from rigtop.app import _print_cycle
+        _print_cycle("12:00:00", self._pos, "JP90qd", {"gps_src": "static"})
+        out = capsys.readouterr().out
+        assert "CQ" not in out
+        assert "ITU" not in out
+
+    def test_no_output_when_no_fix(self, capsys):
+        from rigtop.app import _print_cycle
+        _print_cycle("12:00:00", None, "", {})
+        out = capsys.readouterr().out
+        assert "No GPS fix" in out
