@@ -2,13 +2,16 @@ name: CI
 
 on:
   push:
-    branches: ["main", "feat/**", "fix/**", "refactor/**", "chore/**"]
+    branches: ["main", "feat/**", "fix/**", "refactor/**", "chore/**", "docs/**"]
   pull_request:
     branches: ["main"]
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   commit-lint:
