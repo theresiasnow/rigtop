@@ -31,10 +31,6 @@ tests/
   test_buffers.py  # AprsBuffer, MessageBuffer, DirewolfBuffer
 ```
 
-## Code style (additions)
-
-- Type checker: mypy (not yet enforced on all files)
-
 ## Key conventions
 
 - All `connections()` dicts must have: `label`, `kind`, `status`, and optionally `address`, `clients`
@@ -44,10 +40,7 @@ tests/
 - Config is loaded once in `cli.main()` — pass values down, don't re-read TOML at runtime
 - Multiple rigs: use `[[rig]]` + `[rig.rigctld]` in TOML; `cfg.select_rig(name)` switches active rig
 - `except (A, B):` — always use tuple form; bare `except A, B:` silently only catches `A` in Python 3
-
-## Commit messages (note)
-
-The CI `commit-lint` job runs `cz check` on every PR. If a bad commit lands on the branch, rebase and amend before pushing.
+- Type checker: mypy (not yet enforced on all files)
 
 ## Running
 
