@@ -994,7 +994,7 @@ class PropagationPanel(Static):
         def _int_or_none(val: str) -> int | None:
             try:
                 return int(val)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 return None
 
         aval = _int_or_none(str(aindex))
