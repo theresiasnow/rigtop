@@ -43,5 +43,6 @@ htmlcov/
 Thumbs.db
 desktop.ini
 
-# Claude Code
-.claude/
+# Claude Code — local settings and worktrees, but not shared agents
+.claude/settings.local.json
+.claude/worktrees/
