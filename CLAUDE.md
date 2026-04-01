@@ -52,3 +52,20 @@ uv run rigtop --scan             # LAN scan
 uv run pytest tests/             # unit tests
 uv run ruff check rigtop/        # lint
 ```
+
+## PR workflow
+
+1. **Branch** — `feat/` or `fix/`, never `main` (hotfixes only)
+2. **Lint + test** — `uv run ruff check rigtop/` and `uv run pytest tests/`
+3. **PR** — `gh pr create` with summary and test plan
+4. **Copilot review** — `gh pr edit <number> --add-reviewer copilot`
+5. **Check review** — read and address all comments:
+   ```bash
+   gh api repos/theresiasnow/rigtop/pulls/<number>/reviews --jq '.[] | {user: .user.login, state, body}'
+   gh api repos/theresiasnow/rigtop/pulls/<number>/comments --jq '.[] | {path, line, body}'
+   ```
+6. **Check CI** — fix any failing jobs before merging:
+   ```bash
+   gh pr checks <number>
+   gh run view <run-id> --log-failed
+   ```
