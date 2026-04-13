@@ -81,7 +81,7 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.bump.outputs.tag != ''
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.bump.outputs.tag }}
           files: dist/*
@@ -125,7 +125,7 @@ jobs:
         run: iscc /DAppVersion=${{ needs.bump.outputs.tag }} rigtop.iss
 
       - name: Upload installer to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.bump.outputs.tag }}
           files: installer/rigtop-*-setup.exe
