@@ -9,20 +9,20 @@ dependencies = [
     "pydantic>=2.12.5",
     "pynmea2>=1.19.0",
     "pyserial>=3.5",
-    "pywinpty>=2.0; sys_platform == 'win32'",
-    "rich>=13.0",
-    "textual>=0.80.0",
+    "pywinpty>=3.0.3; sys_platform == 'win32'",
+    "rich>=15.0.0",
+    "textual>=8.2.3",
     "reverse_geocoder>=1.5.1",
-    "psutil>=6.0",
+    "psutil>=7.2.2",
 ]
 
 [dependency-groups]
 dev = [
-    "commitizen>=4.0",
-    "pyinstaller>=6.0",
-    "pylint>=3.0",
-    "pytest>=8.0",
-    "ruff>=0.15.6",
+    "commitizen>=4.13.10",
+    "pyinstaller>=6.19.0",
+    "pylint>=4.0.5",
+    "pytest>=9.0.3",
+    "ruff>=0.15.10",
 ]
 
 [build-system]
